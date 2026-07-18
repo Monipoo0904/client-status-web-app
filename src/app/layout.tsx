@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Bricolage_Grotesque } from "next/font/google";
+import { Montserrat, DM_Sans } from "next/font/google";
 import "./globals.css";
 
-const displayFont = Bricolage_Grotesque({
-  variable: "--font-display",
+const headingFont = Montserrat({
+  variable: "--font-heading",
   subsets: ["latin"]
 });
 
-const bodyFont = Space_Grotesk({
-  variable: "--font-body",
+const bodyFont = DM_Sans({
+  variable: "--font-sans",
   subsets: ["latin"]
 });
 
@@ -24,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${displayFont.variable} ${bodyFont.variable}`}>
+      <body className={`${headingFont.variable} ${bodyFont.variable}`}>
         {children}
       </body>
     </html>

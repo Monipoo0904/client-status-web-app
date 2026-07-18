@@ -573,14 +573,14 @@ export default function Home() {
         </motion.div>
       </section>
 
-      <section className="metrics-grid metrics-grid-four">
+      <section className="metrics-grid metrics-grid-four motion-section delay-1">
         <MetricCard icon={<FileText size={20} />} label="Projects" value={String(projects.length)} tone="sun" />
         <MetricCard icon={<ListTodo size={20} />} label="Open Tasks" value={String(openTaskCount)} tone="forest" />
         <MetricCard icon={<Handshake size={20} />} label="Active Contracts" value={String(activeContracts)} tone="flare" />
         <MetricCard icon={<UsersRound size={20} />} label="Developers" value={String(developers.length)} tone="earth" />
       </section>
 
-      <section className="workspace-layout">
+      <section className="workspace-layout motion-section delay-2">
         <aside className="panel project-sidebar">
           <header className="panel-header">
             <h3>Projects</h3>
@@ -739,7 +739,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="builder-grid">
+      <section className="builder-grid motion-section delay-3">
         <article className="panel">
           <header className="panel-header">
             <h3>Add Developer</h3>
@@ -864,7 +864,7 @@ export default function Home() {
         </article>
       </section>
 
-      <section className="builder-grid">
+      <section className="builder-grid motion-section delay-4">
         <article className="panel">
           <header className="panel-header">
             <h3>Add Task</h3>
@@ -1083,7 +1083,7 @@ export default function Home() {
         </article>
       </section>
 
-      <section className="uniform-two-col">
+      <section className="uniform-two-col motion-section delay-5">
         <article className="panel">
           <header className="panel-header">
             <h3>Meeting Notes Recorder</h3>
