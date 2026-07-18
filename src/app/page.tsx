@@ -14,6 +14,7 @@ import {
   UsersRound
 } from "lucide-react";
 
+type ProjectStatus = "On Track" | "At Risk" | "Blocked" | "Done";
 type ContractStatus = "Draft" | "Active" | "At Risk" | "Closed";
 type TaskStatus = "Todo" | "In Progress" | "Blocked" | "Done";
 type TaskPriority = "Low" | "Medium" | "High";
@@ -26,6 +27,15 @@ type Developer = {
   capacity: number;
 };
 
+type Project = {
+  id: string;
+  name: string;
+  client: string;
+  status: ProjectStatus;
+  ownerDeveloperId: string;
+  summary: string;
+};
+
 type ContractProgressEntry = {
   id: string;
   note: string;
@@ -35,6 +45,7 @@ type ContractProgressEntry = {
 
 type Contract = {
   id: string;
+  projectId: string;
   name: string;
   client: string;
   value: number;
@@ -47,6 +58,7 @@ type Contract = {
 
 type Task = {
   id: string;
+  projectId: string;
   title: string;
   summary: string;
   status: TaskStatus;
@@ -89,9 +101,29 @@ const seedDevelopers: Developer[] = [
   }
 ];
 
+const seedProjects: Project[] = [
+  {
+    id: "PRJ-101",
+    name: "Client Portal Refresh",
+    client: "Northwind Labs",
+    status: "On Track",
+    ownerDeveloperId: "DEV-001",
+    summary: "Modernize client portal with task and contract visibility."
+  },
+  {
+    id: "PRJ-108",
+    name: "Field Ops Mobile Sync",
+    client: "Harvest Grid",
+    status: "At Risk",
+    ownerDeveloperId: "DEV-003",
+    summary: "Improve sync reliability and release updated field workflow tooling."
+  }
+];
+
 const seedContracts: Contract[] = [
   {
     id: "CTR-001",
+    projectId: "PRJ-101",
     name: "Northwind Labs Service Agreement",
     client: "Northwind Labs",
     value: 120000,
@@ -110,6 +142,7 @@ const seedContracts: Contract[] = [
   },
   {
     id: "CTR-002",
+    projectId: "PRJ-108",
     name: "Harvest Grid Extension",
     client: "Harvest Grid",
     value: 88000,
@@ -131,6 +164,7 @@ const seedContracts: Contract[] = [
 const seedTasks: Task[] = [
   {
     id: "TASK-001",
+    projectId: "PRJ-101",
     title: "Launch Client Status Dashboard MVP",
     summary: "Finalize one clear dashboard flow for client demos.",
     status: "In Progress",
@@ -141,6 +175,7 @@ const seedTasks: Task[] = [
   },
   {
     id: "TASK-002",
+    projectId: "PRJ-108",
     title: "Complete API reliability pass",
     summary: "Reduce response failures and finalize service monitoring setup.",
     status: "Todo",
@@ -185,8 +220,8 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function statusChipClass(status: TaskStatus | ContractStatus) {
-  if (status === "Done" || status === "Active") {
+function statusChipClass(status: TaskStatus | ContractStatus | ProjectStatus) {
+  if (status === "Done" || status === "Active" || status === "On Track") {
     return "status-chip status-on-track";
   }
 
@@ -221,27 +256,34 @@ function MetricCard({
   );
 }
 
+function ProgressBar({ value }: { value: number }) {
+  return (
+    <div className="progress-shell" aria-label={`Progress ${value}%`}>
+      <div className="progress-fill" style={{ width: `${value}%` }} />
+    </div>
+  );
+}
+
 export default function Home() {
   const [developers, setDevelopers] = useState<Developer[]>(seedDevelopers);
+  const [projects, setProjects] = useState<Project[]>(seedProjects);
   const [contracts, setContracts] = useState<Contract[]>(seedContracts);
   const [tasks, setTasks] = useState<Task[]>(seedTasks);
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Record<string, boolean>>({
+    "PRJ-101": true,
+    "PRJ-108": false
+  });
   const [contractDrafts, setContractDrafts] = useState<Record<string, string>>({});
   const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>(initialMeetings);
-  const [developerForm, setDeveloperForm] = useState({
-    name: "",
-    role: "",
-    focus: "",
-    capacity: 70
-  });
-  const [contractForm, setContractForm] = useState({
+
+  const [projectForm, setProjectForm] = useState({
     name: "",
     client: "",
-    value: 0,
-    status: "Draft" as ContractStatus,
+    status: "On Track" as ProjectStatus,
     ownerDeveloperId: "",
-    startDate: "",
-    renewalDate: ""
+    summary: ""
   });
+
   const [taskForm, setTaskForm] = useState({
     title: "",
     summary: "",
@@ -249,8 +291,28 @@ export default function Home() {
     priority: "Medium" as TaskPriority,
     dueDate: "",
     developerId: "",
-    contractId: ""
+    contractId: "",
+    projectId: ""
   });
+
+  const [contractForm, setContractForm] = useState({
+    name: "",
+    client: "",
+    value: 0,
+    status: "Draft" as ContractStatus,
+    ownerDeveloperId: "",
+    projectId: "",
+    startDate: "",
+    renewalDate: ""
+  });
+
+  const [developerForm, setDeveloperForm] = useState({
+    name: "",
+    role: "",
+    focus: "",
+    capacity: 70
+  });
+
   const [meetingForm, setMeetingForm] = useState({
     title: "",
     meetingDate: "",
@@ -258,7 +320,28 @@ export default function Home() {
     notes: ""
   });
 
+  const developerLookup = useMemo(() => new Map(developers.map((d) => [d.id, d])), [developers]);
+  const contractLookup = useMemo(() => new Map(contracts.map((c) => [c.id, c])), [contracts]);
+
+  const projectOverview = useMemo(() => {
+    return projects.map((project) => {
+      const projectTasks = tasks.filter((task) => task.projectId === project.id);
+      const projectContracts = contracts.filter((contract) => contract.projectId === project.id);
+      const doneTasks = projectTasks.filter((task) => task.status === "Done").length;
+      const progressPct = projectTasks.length ? Math.round((doneTasks / projectTasks.length) * 100) : 0;
+
+      return {
+        project,
+        tasks: projectTasks,
+        contracts: projectContracts,
+        progressPct,
+        openTasks: projectTasks.filter((task) => task.status !== "Done").length
+      };
+    });
+  }, [projects, tasks, contracts]);
+
   const taskDoneCount = tasks.filter((task) => task.status === "Done").length;
+  const openTaskCount = tasks.length - taskDoneCount;
   const activeContracts = contracts.filter((contract) => contract.status === "Active").length;
 
   const activityFeed = useMemo(() => {
@@ -285,9 +368,9 @@ export default function Home() {
     );
   }, [contracts, meetingNotes]);
 
-  const developerLookup = useMemo(() => {
-    return new Map(developers.map((developer) => [developer.id, developer]));
-  }, [developers]);
+  const toggleProjectExpanded = (projectId: string) => {
+    setExpandedProjectIds((current) => ({ ...current, [projectId]: !current[projectId] }));
+  };
 
   const handleDeveloperAdd = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -295,9 +378,10 @@ export default function Home() {
       return;
     }
 
+    const nextId = `DEV-${Date.now()}`;
     setDevelopers((current) => [
       {
-        id: `DEV-${Date.now()}`,
+        id: nextId,
         name: developerForm.name,
         role: developerForm.role,
         focus: developerForm.focus || "General",
@@ -314,15 +398,45 @@ export default function Home() {
     });
   };
 
+  const handleProjectAdd = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!projectForm.name || !projectForm.client || !projectForm.ownerDeveloperId) {
+      return;
+    }
+
+    const nextId = `PRJ-${Date.now()}`;
+    setProjects((current) => [
+      {
+        id: nextId,
+        name: projectForm.name,
+        client: projectForm.client,
+        status: projectForm.status,
+        ownerDeveloperId: projectForm.ownerDeveloperId,
+        summary: projectForm.summary || "No summary provided."
+      },
+      ...current
+    ]);
+
+    setExpandedProjectIds((current) => ({ ...current, [nextId]: true }));
+    setProjectForm({
+      name: "",
+      client: "",
+      status: "On Track",
+      ownerDeveloperId: "",
+      summary: ""
+    });
+  };
+
   const handleContractAdd = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!contractForm.name || !contractForm.client || !contractForm.ownerDeveloperId) {
+    if (!contractForm.name || !contractForm.client || !contractForm.ownerDeveloperId || !contractForm.projectId) {
       return;
     }
 
     setContracts((current) => [
       {
         id: `CTR-${Date.now()}`,
+        projectId: contractForm.projectId,
         name: contractForm.name,
         client: contractForm.client,
         value: Number(contractForm.value),
@@ -341,6 +455,7 @@ export default function Home() {
       value: 0,
       status: "Draft",
       ownerDeveloperId: "",
+      projectId: "",
       startDate: "",
       renewalDate: ""
     });
@@ -348,13 +463,14 @@ export default function Home() {
 
   const handleTaskAdd = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!taskForm.title || !taskForm.developerId || !taskForm.contractId) {
+    if (!taskForm.title || !taskForm.projectId || !taskForm.developerId) {
       return;
     }
 
     setTasks((current) => [
       {
         id: `TASK-${Date.now()}`,
+        projectId: taskForm.projectId,
         title: taskForm.title,
         summary: taskForm.summary || "No summary provided.",
         status: taskForm.status,
@@ -373,7 +489,8 @@ export default function Home() {
       priority: "Medium",
       dueDate: "",
       developerId: "",
-      contractId: ""
+      contractId: "",
+      projectId: ""
     });
   };
 
@@ -447,30 +564,179 @@ export default function Home() {
             </div>
             <div>
               <p className="eyebrow">MyVillage Project</p>
-              <h1>Centralized Tracker Workspace</h1>
+              <h1>Project Portfolio Overview</h1>
             </div>
           </div>
           <p className="hero-copy">
-            Edit one demo task, log timestamped contract progress, and record meeting notes in one location.
+            Unified overview of projects, tasks, contracts, and developer assignments with expandable project breakdowns.
           </p>
         </motion.div>
       </section>
 
       <section className="metrics-grid metrics-grid-four">
-        <MetricCard icon={<ListTodo size={20} />} label="Total Tasks" value="1" tone="sun" />
-        <MetricCard
-          icon={<CheckCircle2 size={20} />}
-          label="Tasks Done"
-          value={`${taskDoneCount}/${tasks.length}`}
-          tone="forest"
-        />
+        <MetricCard icon={<FileText size={20} />} label="Projects" value={String(projects.length)} tone="sun" />
+        <MetricCard icon={<ListTodo size={20} />} label="Open Tasks" value={String(openTaskCount)} tone="forest" />
         <MetricCard icon={<Handshake size={20} />} label="Active Contracts" value={String(activeContracts)} tone="flare" />
-        <MetricCard
-          icon={<MessagesSquare size={20} />}
-          label="Meeting Notes"
-          value={String(meetingNotes.length)}
-          tone="earth"
-        />
+        <MetricCard icon={<UsersRound size={20} />} label="Developers" value={String(developers.length)} tone="earth" />
+      </section>
+
+      <section className="workspace-layout">
+        <aside className="panel project-sidebar">
+          <header className="panel-header">
+            <h3>Projects</h3>
+            <BriefcaseBusiness size={18} />
+          </header>
+
+          <div className="sidebar-project-list">
+            {projectOverview.map(({ project, tasks: pTasks, contracts: pContracts, openTasks }) => (
+              <article key={project.id} className="sidebar-project-item">
+                <button
+                  type="button"
+                  className="sidebar-project-toggle"
+                  onClick={() => toggleProjectExpanded(project.id)}
+                >
+                  <div>
+                    <p className="project-id">{project.id}</p>
+                    <h4>{project.name}</h4>
+                    <p className="project-meta">{project.client}</p>
+                  </div>
+                  <span className={statusChipClass(project.status)}>{project.status}</span>
+                </button>
+
+                {expandedProjectIds[project.id] ? (
+                  <div className="sidebar-project-details">
+                    <p>
+                      <strong>Owner:</strong> {developerLookup.get(project.ownerDeveloperId)?.name ?? "Unknown"}
+                    </p>
+                    <p>
+                      <strong>Tasks:</strong> {pTasks.length} ({openTasks} open)
+                    </p>
+                    <p>
+                      <strong>Contracts:</strong> {pContracts.length}
+                    </p>
+                    <ul>
+                      {pTasks.slice(0, 3).map((task) => (
+                        <li key={task.id}>{task.title}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        </aside>
+
+        <div className="workspace-main">
+          <article className="panel">
+            <header className="panel-header">
+              <h3>Project Task Completion</h3>
+              <CheckCircle2 size={18} />
+            </header>
+            <div className="project-overview-grid" role="list">
+              {projectOverview.map(({ project, tasks: pTasks, progressPct }) => (
+                <article key={project.id} className="project-overview-card" role="listitem">
+                  <div className="contract-top">
+                    <div>
+                      <p className="project-id">{project.id}</p>
+                      <h3>{project.name}</h3>
+                      <p className="project-meta">{project.summary}</p>
+                    </div>
+                    <span className={statusChipClass(project.status)}>{project.status}</span>
+                  </div>
+                  <div className="progress-row">
+                    <span>Task completion</span>
+                    <strong>{progressPct}%</strong>
+                  </div>
+                  <ProgressBar value={progressPct} />
+                  <div className="task-meta-grid">
+                    <span>Total tasks: {pTasks.length}</span>
+                    <span>Done: {pTasks.filter((task) => task.status === "Done").length}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </article>
+
+          <div className="uniform-two-col">
+            <article className="panel">
+              <header className="panel-header">
+                <h3>All Tasks</h3>
+                <ListTodo size={18} />
+              </header>
+              <div className="task-list" role="list">
+                {tasks.map((task) => (
+                  <article key={task.id} className="task-item" role="listitem">
+                    <div className="contract-top">
+                      <div>
+                        <p className="project-id">{task.id}</p>
+                        <h3>{task.title}</h3>
+                        <p className="project-meta">{task.summary}</p>
+                      </div>
+                      <span className={statusChipClass(task.status)}>{task.status}</span>
+                    </div>
+                    <div className="task-meta-grid">
+                      <span>Priority: {task.priority}</span>
+                      <span>Due: {task.dueDate}</span>
+                      <span>Project: {projects.find((project) => project.id === task.projectId)?.name ?? "Unknown"}</span>
+                      <span>Developer: {developerLookup.get(task.developerId)?.name ?? "Unassigned"}</span>
+                      <span>Contract: {contractLookup.get(task.contractId)?.name ?? "Not linked"}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </article>
+
+            <article className="panel">
+              <header className="panel-header">
+                <h3>All Contracts</h3>
+                <Handshake size={18} />
+              </header>
+              <div className="contract-stack" role="list">
+                {contracts.map((contract) => (
+                  <article key={contract.id} className="contract-item" role="listitem">
+                    <div className="contract-top">
+                      <div>
+                        <p className="project-id">{contract.id}</p>
+                        <h3>{contract.name}</h3>
+                        <p className="project-meta">{contract.client}</p>
+                      </div>
+                      <span className={statusChipClass(contract.status)}>{contract.status}</span>
+                    </div>
+                    <div className="task-meta-grid">
+                      <span>Project: {projects.find((project) => project.id === contract.projectId)?.name ?? "Unknown"}</span>
+                      <span>Value: {formatCurrency(contract.value)}</span>
+                      <span>Owner: {developerLookup.get(contract.ownerDeveloperId)?.name ?? "Unknown"}</span>
+                      <span>Renewal: {contract.renewalDate}</span>
+                    </div>
+                    <form className="inline-form" onSubmit={(event) => handleContractProgressAdd(event, contract.id)}>
+                      <input
+                        value={contractDrafts[contract.id] ?? ""}
+                        onChange={(event) =>
+                          setContractDrafts((current) => ({ ...current, [contract.id]: event.target.value }))
+                        }
+                        placeholder="Add timestamped progress update"
+                      />
+                      <button type="submit">
+                        <Plus size={14} />
+                        Log
+                      </button>
+                    </form>
+                    <ul className="contract-log-list">
+                      {contract.progress.map((entry) => (
+                        <li key={entry.id}>
+                          <span>{entry.note}</span>
+                          <span>
+                            {entry.author} · {formatDateTime(entry.createdAt)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </div>
+        </div>
       </section>
 
       <section className="builder-grid">
@@ -529,65 +795,47 @@ export default function Home() {
 
         <article className="panel">
           <header className="panel-header">
-            <h3>Add Contract</h3>
+            <h3>Add Project</h3>
             <BriefcaseBusiness size={18} />
           </header>
-          <form className="entry-form" onSubmit={handleContractAdd}>
+          <form className="entry-form" onSubmit={handleProjectAdd}>
             <div className="field-row two-col">
               <label>
-                Contract Name
+                Project Name
                 <input
-                  value={contractForm.name}
-                  onChange={(event) =>
-                    setContractForm((current) => ({ ...current, name: event.target.value }))
-                  }
+                  value={projectForm.name}
+                  onChange={(event) => setProjectForm((current) => ({ ...current, name: event.target.value }))}
                 />
               </label>
               <label>
                 Client
                 <input
-                  value={contractForm.client}
-                  onChange={(event) =>
-                    setContractForm((current) => ({ ...current, client: event.target.value }))
-                  }
+                  value={projectForm.client}
+                  onChange={(event) => setProjectForm((current) => ({ ...current, client: event.target.value }))}
                 />
               </label>
             </div>
-            <div className="field-row three-col">
-              <label>
-                Value
-                <input
-                  type="number"
-                  min={0}
-                  value={contractForm.value}
-                  onChange={(event) =>
-                    setContractForm((current) => ({ ...current, value: Number(event.target.value) }))
-                  }
-                />
-              </label>
+            <div className="field-row two-col">
               <label>
                 Status
                 <select
-                  value={contractForm.status}
+                  value={projectForm.status}
                   onChange={(event) =>
-                    setContractForm((current) => ({
-                      ...current,
-                      status: event.target.value as ContractStatus
-                    }))
+                    setProjectForm((current) => ({ ...current, status: event.target.value as ProjectStatus }))
                   }
                 >
-                  <option value="Draft">Draft</option>
-                  <option value="Active">Active</option>
+                  <option value="On Track">On Track</option>
                   <option value="At Risk">At Risk</option>
-                  <option value="Closed">Closed</option>
+                  <option value="Blocked">Blocked</option>
+                  <option value="Done">Done</option>
                 </select>
               </label>
               <label>
-                Owner
+                Project Owner
                 <select
-                  value={contractForm.ownerDeveloperId}
+                  value={projectForm.ownerDeveloperId}
                   onChange={(event) =>
-                    setContractForm((current) => ({ ...current, ownerDeveloperId: event.target.value }))
+                    setProjectForm((current) => ({ ...current, ownerDeveloperId: event.target.value }))
                   }
                 >
                   <option value="">Select developer</option>
@@ -599,29 +847,19 @@ export default function Home() {
                 </select>
               </label>
             </div>
-            <div className="field-row two-col">
+            <div className="field-row">
               <label>
-                Start Date
-                <input
-                  type="date"
-                  value={contractForm.startDate}
+                Project Summary
+                <textarea
+                  rows={3}
+                  value={projectForm.summary}
                   onChange={(event) =>
-                    setContractForm((current) => ({ ...current, startDate: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                Renewal Date
-                <input
-                  type="date"
-                  value={contractForm.renewalDate}
-                  onChange={(event) =>
-                    setContractForm((current) => ({ ...current, renewalDate: event.target.value }))
+                    setProjectForm((current) => ({ ...current, summary: event.target.value }))
                   }
                 />
               </label>
             </div>
-            <button type="submit">Add Contract</button>
+            <button type="submit">Add Project</button>
           </form>
         </article>
       </section>
@@ -638,9 +876,7 @@ export default function Home() {
                 Task Title
                 <input
                   value={taskForm.title}
-                  onChange={(event) =>
-                    setTaskForm((current) => ({ ...current, title: event.target.value }))
-                  }
+                  onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
                 />
               </label>
               <label>
@@ -648,13 +884,25 @@ export default function Home() {
                 <input
                   type="date"
                   value={taskForm.dueDate}
-                  onChange={(event) =>
-                    setTaskForm((current) => ({ ...current, dueDate: event.target.value }))
-                  }
+                  onChange={(event) => setTaskForm((current) => ({ ...current, dueDate: event.target.value }))}
                 />
               </label>
             </div>
             <div className="field-row three-col">
+              <label>
+                Project
+                <select
+                  value={taskForm.projectId}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, projectId: event.target.value }))}
+                >
+                  <option value="">Select project</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label>
                 Status
                 <select
@@ -674,10 +922,7 @@ export default function Home() {
                 <select
                   value={taskForm.priority}
                   onChange={(event) =>
-                    setTaskForm((current) => ({
-                      ...current,
-                      priority: event.target.value as TaskPriority
-                    }))
+                    setTaskForm((current) => ({ ...current, priority: event.target.value as TaskPriority }))
                   }
                 >
                   <option value="Low">Low</option>
@@ -685,6 +930,8 @@ export default function Home() {
                   <option value="High">High</option>
                 </select>
               </label>
+            </div>
+            <div className="field-row two-col">
               <label>
                 Developer
                 <select
@@ -701,8 +948,6 @@ export default function Home() {
                   ))}
                 </select>
               </label>
-            </div>
-            <div className="field-row two-col">
               <label>
                 Linked Contract
                 <select
@@ -711,7 +956,7 @@ export default function Home() {
                     setTaskForm((current) => ({ ...current, contractId: event.target.value }))
                   }
                 >
-                  <option value="">Select contract</option>
+                  <option value="">Optional</option>
                   {contracts.map((contract) => (
                     <option key={contract.id} value={contract.id}>
                       {contract.name}
@@ -719,13 +964,14 @@ export default function Home() {
                   ))}
                 </select>
               </label>
+            </div>
+            <div className="field-row">
               <label>
-                Summary
-                <input
+                Task Summary
+                <textarea
+                  rows={3}
                   value={taskForm.summary}
-                  onChange={(event) =>
-                    setTaskForm((current) => ({ ...current, summary: event.target.value }))
-                  }
+                  onChange={(event) => setTaskForm((current) => ({ ...current, summary: event.target.value }))}
                 />
               </label>
             </div>
@@ -735,119 +981,109 @@ export default function Home() {
 
         <article className="panel">
           <header className="panel-header">
-            <h3>Team Overview</h3>
-            <UsersRound size={18} />
-          </header>
-          <div className="developer-grid" role="list">
-            {developers.map((developer) => {
-              const assignedTasks = tasks.filter((task) => task.developerId === developer.id).length;
-              const ownedContracts = contracts.filter(
-                (contract) => contract.ownerDeveloperId === developer.id
-              ).length;
-
-              return (
-                <article key={developer.id} className="developer-card" role="listitem">
-                  <p className="project-id">{developer.id}</p>
-                  <h3>{developer.name}</h3>
-                  <p className="project-meta">{developer.role}</p>
-                  <p className="task-line">Focus: {developer.focus}</p>
-                  <div className="developer-meta">
-                    <span>Capacity: {developer.capacity}%</span>
-                    <span>Tasks: {assignedTasks}</span>
-                    <span>Contracts: {ownedContracts}</span>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </article>
-      </section>
-
-      <section className="lower-grid">
-        <article className="panel">
-          <header className="panel-header">
-            <h3>All Tasks</h3>
-            <FileText size={18} />
-          </header>
-          <div className="task-list" role="list">
-            {tasks.map((task) => (
-              <article key={task.id} className="task-item" role="listitem">
-                <div className="contract-top">
-                  <div>
-                    <p className="project-id">{task.id}</p>
-                    <h3>{task.title}</h3>
-                    <p className="project-meta">{task.summary}</p>
-                  </div>
-                  <span className={statusChipClass(task.status)}>{task.status}</span>
-                </div>
-                <div className="task-meta-grid">
-                  <span>Priority: {task.priority}</span>
-                  <span>Due: {task.dueDate}</span>
-                  <span>Developer: {developerLookup.get(task.developerId)?.name ?? "Unassigned"}</span>
-                  <span>
-                    Contract: {contracts.find((contract) => contract.id === task.contractId)?.name ?? "None"}
-                  </span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </article>
-
-        <article className="panel">
-          <header className="panel-header">
-            <h3>All Contracts</h3>
+            <h3>Add Contract</h3>
             <Handshake size={18} />
           </header>
-          <div className="contract-stack" role="list">
-            {contracts.map((contract) => (
-              <article key={contract.id} className="contract-item" role="listitem">
-                <div className="contract-top">
-                  <div>
-                    <p className="project-id">{contract.id}</p>
-                    <h3>{contract.name}</h3>
-                    <p className="project-meta">{contract.client}</p>
-                  </div>
-                  <span className={statusChipClass(contract.status)}>{contract.status}</span>
-                </div>
-
-                <div className="task-meta-grid">
-                  <span>Value: {formatCurrency(contract.value)}</span>
-                  <span>Owner: {developerLookup.get(contract.ownerDeveloperId)?.name ?? "Unknown"}</span>
-                  <span>Start: {contract.startDate}</span>
-                  <span>Renewal: {contract.renewalDate}</span>
-                </div>
-
-                <form className="inline-form" onSubmit={(event) => handleContractProgressAdd(event, contract.id)}>
-                  <input
-                    value={contractDrafts[contract.id] ?? ""}
-                    onChange={(event) =>
-                      setContractDrafts((current) => ({ ...current, [contract.id]: event.target.value }))
-                    }
-                    placeholder="Add timestamped progress update"
-                  />
-                  <button type="submit">
-                    <Plus size={14} />
-                    Log
-                  </button>
-                </form>
-
-                <ul className="contract-log-list">
-                  {contract.progress.map((entry) => (
-                    <li key={entry.id}>
-                      <span>{entry.note}</span>
-                      <span>
-                        {entry.author} · {formatDateTime(entry.createdAt)}
-                      </span>
-                    </li>
+          <form className="entry-form" onSubmit={handleContractAdd}>
+            <div className="field-row two-col">
+              <label>
+                Contract Name
+                <input
+                  value={contractForm.name}
+                  onChange={(event) => setContractForm((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+              <label>
+                Client
+                <input
+                  value={contractForm.client}
+                  onChange={(event) => setContractForm((current) => ({ ...current, client: event.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="field-row three-col">
+              <label>
+                Project
+                <select
+                  value={contractForm.projectId}
+                  onChange={(event) => setContractForm((current) => ({ ...current, projectId: event.target.value }))}
+                >
+                  <option value="">Select project</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
                   ))}
-                </ul>
-              </article>
-            ))}
-          </div>
+                </select>
+              </label>
+              <label>
+                Value
+                <input
+                  type="number"
+                  min={0}
+                  value={contractForm.value}
+                  onChange={(event) =>
+                    setContractForm((current) => ({ ...current, value: Number(event.target.value) }))
+                  }
+                />
+              </label>
+              <label>
+                Status
+                <select
+                  value={contractForm.status}
+                  onChange={(event) =>
+                    setContractForm((current) => ({ ...current, status: event.target.value as ContractStatus }))
+                  }
+                >
+                  <option value="Draft">Draft</option>
+                  <option value="Active">Active</option>
+                  <option value="At Risk">At Risk</option>
+                  <option value="Closed">Closed</option>
+                </select>
+              </label>
+            </div>
+            <div className="field-row three-col">
+              <label>
+                Contract Owner
+                <select
+                  value={contractForm.ownerDeveloperId}
+                  onChange={(event) =>
+                    setContractForm((current) => ({ ...current, ownerDeveloperId: event.target.value }))
+                  }
+                >
+                  <option value="">Select developer</option>
+                  {developers.map((developer) => (
+                    <option key={developer.id} value={developer.id}>
+                      {developer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Start Date
+                <input
+                  type="date"
+                  value={contractForm.startDate}
+                  onChange={(event) => setContractForm((current) => ({ ...current, startDate: event.target.value }))}
+                />
+              </label>
+              <label>
+                Renewal Date
+                <input
+                  type="date"
+                  value={contractForm.renewalDate}
+                  onChange={(event) =>
+                    setContractForm((current) => ({ ...current, renewalDate: event.target.value }))
+                  }
+                />
+              </label>
+            </div>
+            <button type="submit">Add Contract</button>
+          </form>
         </article>
       </section>
 
-      <section className="lower-grid">
+      <section className="uniform-two-col">
         <article className="panel">
           <header className="panel-header">
             <h3>Meeting Notes Recorder</h3>
@@ -893,29 +1129,12 @@ export default function Home() {
                 <textarea
                   rows={4}
                   value={meetingForm.notes}
-                  onChange={(event) =>
-                    setMeetingForm((current) => ({ ...current, notes: event.target.value }))
-                  }
+                  onChange={(event) => setMeetingForm((current) => ({ ...current, notes: event.target.value }))}
                 />
               </label>
             </div>
             <button type="submit">Save Meeting Note</button>
           </form>
-
-          <div className="meeting-list" role="list">
-            {meetingNotes.map((meeting) => (
-              <article key={meeting.id} className="meeting-item" role="listitem">
-                <div className="activity-top">
-                  <strong>{meeting.title}</strong>
-                  <span>{formatDateTime(meeting.createdAt)}</span>
-                </div>
-                <p className="project-meta">
-                  Date: {meeting.meetingDate} · Attendees: {meeting.attendees}
-                </p>
-                <p className="activity-details">{meeting.notes}</p>
-              </article>
-            ))}
-          </div>
         </article>
 
         <article className="panel">

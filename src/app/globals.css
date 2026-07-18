@@ -681,6 +681,107 @@ p {
   color: var(--brand-brown);
 }
 
+.workspace-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 0.85rem;
+}
+
+.workspace-main {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.uniform-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.project-sidebar {
+  align-self: start;
+  position: sticky;
+  top: 1rem;
+}
+
+.sidebar-project-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.sidebar-project-item {
+  border: 1px solid rgba(38, 66, 38, 0.16);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.78);
+  overflow: hidden;
+}
+
+.sidebar-project-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0.68rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.55rem;
+  cursor: pointer;
+}
+
+.sidebar-project-toggle:hover {
+  background: rgba(177, 143, 64, 0.08);
+}
+
+.sidebar-project-toggle h4 {
+  font-size: 0.95rem;
+}
+
+.sidebar-project-details {
+  border-top: 1px solid rgba(38, 66, 38, 0.14);
+  padding: 0.6rem 0.68rem;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--brand-brown);
+}
+
+.sidebar-project-details ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.sidebar-project-details li {
+  margin: 0.2rem 0;
+}
+
+.project-overview-grid {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.project-overview-card {
+  border: 1px solid rgba(38, 66, 38, 0.16);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.72rem;
+}
+
+.developer-grid {
+  grid-template-columns: 1fr;
+}
+
+.developer-card h3,
+.task-item h3,
+.contract-item h3,
+.project-overview-card h3 {
+  font-size: 1rem;
+}
+
+.task-meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .inline-form {
   display: flex;
   gap: 0.45rem;
@@ -797,6 +898,15 @@ p {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .workspace-layout,
+  .uniform-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .project-sidebar {
+    position: static;
+  }
+
   .metrics-grid.metrics-grid-four {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -836,7 +946,8 @@ p {
   .renewal-alerts li,
   .activity-top,
   .contract-log-list li,
-  .inline-form {
+  .inline-form,
+  .sidebar-project-toggle {
     flex-direction: column;
     align-items: flex-start;
   }
