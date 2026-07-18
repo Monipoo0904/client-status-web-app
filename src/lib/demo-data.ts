@@ -1,4 +1,5 @@
 export type ProjectStatus = "On Track" | "At Risk" | "Blocked";
+export type ContractStatus = "Active" | "Pending Signature" | "Renewal Due";
 
 export type Priority = "High" | "Medium" | "Low";
 
@@ -18,6 +19,16 @@ export type Project = {
   sprintGoal: string;
   villagers: Villager[];
   nextSteps: { task: string; due: string; priority: Priority }[];
+};
+
+export type Contract = {
+  id: string;
+  projectId: string;
+  client: string;
+  owner: string;
+  value: number;
+  renewalDate: string;
+  status: ContractStatus;
 };
 
 export const projects: Project[] = [
@@ -110,3 +121,33 @@ export const developerWorkstreams = [
     status: "On Track"
   }
 ] as const;
+
+export const contracts: Contract[] = [
+  {
+    id: "CTR-501",
+    projectId: "PRJ-101",
+    client: "Northwind Labs",
+    owner: "Ari M.",
+    value: 120000,
+    renewalDate: "2026-12-14",
+    status: "Active"
+  },
+  {
+    id: "CTR-502",
+    projectId: "PRJ-108",
+    client: "Harvest Grid",
+    owner: "Liam K.",
+    value: 89000,
+    renewalDate: "2026-08-01",
+    status: "Renewal Due"
+  },
+  {
+    id: "CTR-503",
+    projectId: "PRJ-114",
+    client: "Skyline Commerce",
+    owner: "Rina T.",
+    value: 164000,
+    renewalDate: "2026-09-10",
+    status: "Pending Signature"
+  }
+];
