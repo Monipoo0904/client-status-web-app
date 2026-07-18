@@ -69,6 +69,12 @@ type Task = {
   contractId: string;
 };
 
+type TaskSummary = {
+  label: string;
+  count: number;
+  color: string;
+};
+
 const seedDevelopers: Developer[] = [
   {
     id: "DEV-001",
@@ -245,6 +251,28 @@ function ProgressBar({ value }: { value: number }) {
   );
 }
 
+function PieChart({ segments }: { segments: TaskSummary[] }) {
+  const total = segments.reduce((sum, segment) => sum + segment.count, 0);
+  const slices = segments
+    .filter((segment) => segment.count > 0)
+    .map((segment, index, list) => {
+      const start = list.slice(0, index).reduce((sum, item) => sum + item.count, 0);
+      const startPct = total ? (start / total) * 100 : 0;
+      const endPct = total ? ((start + segment.count) / total) * 100 : 0;
+      return `${segment.color} ${startPct}% ${endPct}%`;
+    });
+
+  return (
+    <div className="analytics-chart-wrap">
+      <div className="pie-chart" style={{ background: `conic-gradient(${slices.join(", ")})` }} aria-hidden="true" />
+      <div className="pie-chart-center">
+        <strong>{total}</strong>
+        <span>Tasks</span>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [developers, setDevelopers] = useState<Developer[]>(seedDevelopers);
   const [projects, setProjects] = useState<Project[]>(seedProjects);
@@ -312,6 +340,12 @@ export default function Home() {
   const taskDoneCount = tasks.filter((task) => task.status === "Done").length;
   const openTaskCount = tasks.length - taskDoneCount;
   const activeContracts = contracts.filter((contract) => contract.status === "Active").length;
+  const taskStatusSegments: TaskSummary[] = [
+    { label: "Todo", count: tasks.filter((task) => task.status === "Todo").length, color: "#b07c00" },
+    { label: "In Progress", count: tasks.filter((task) => task.status === "In Progress").length, color: "#4f392a" },
+    { label: "Blocked", count: tasks.filter((task) => task.status === "Blocked").length, color: "#8a6200" },
+    { label: "Done", count: tasks.filter((task) => task.status === "Done").length, color: "#1f5b3d" }
+  ];
 
   const activityFeed = useMemo(() => {
     const contractActivity = contracts.flatMap((contract) =>
@@ -549,6 +583,27 @@ export default function Home() {
         </aside>
 
         <div className="workspace-main">
+          <article className="panel analytics-panel">
+            <header className="panel-header">
+              <h3>Task Analytics</h3>
+              <FileText size={18} />
+            </header>
+            <div className="analytics-grid">
+              <PieChart segments={taskStatusSegments} />
+              <div className="analytics-legend">
+                {taskStatusSegments.map((segment) => (
+                  <div key={segment.label} className="analytics-legend-item">
+                    <span className="analytics-swatch" style={{ background: segment.color }} aria-hidden="true" />
+                    <div>
+                      <strong>{segment.label}</strong>
+                      <p>{segment.count} tasks</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </article>
+
           <article className="panel">
             <header className="panel-header">
               <h3>Project Task Completion</h3>
@@ -791,120 +846,6 @@ export default function Home() {
       <section className="builder-grid motion-section delay-4">
         <article className="panel">
           <header className="panel-header">
-            <h3>Add Task</h3>
-            <ListTodo size={18} />
-          </header>
-          <form className="entry-form" onSubmit={handleTaskAdd}>
-            <div className="field-row two-col">
-              <label>
-                Task Title
-                <input
-                  value={taskForm.title}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
-                />
-              </label>
-              <label>
-                Due Date
-                <input
-                  type="date"
-                  value={taskForm.dueDate}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, dueDate: event.target.value }))}
-                />
-              </label>
-            </div>
-            <div className="field-row three-col">
-              <label>
-                Project
-                <select
-                  value={taskForm.projectId}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, projectId: event.target.value }))}
-                >
-                  <option value="">Select project</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Status
-                <select
-                  value={taskForm.status}
-                  onChange={(event) =>
-                    setTaskForm((current) => ({ ...current, status: event.target.value as TaskStatus }))
-                  }
-                >
-                  <option value="Todo">Todo</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Blocked">Blocked</option>
-                  <option value="Done">Done</option>
-                </select>
-              </label>
-              <label>
-                Priority
-                <select
-                  value={taskForm.priority}
-                  onChange={(event) =>
-                    setTaskForm((current) => ({ ...current, priority: event.target.value as TaskPriority }))
-                  }
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                </select>
-              </label>
-            </div>
-            <div className="field-row two-col">
-              <label>
-                Developer
-                <select
-                  value={taskForm.developerId}
-                  onChange={(event) =>
-                    setTaskForm((current) => ({ ...current, developerId: event.target.value }))
-                  }
-                >
-                  <option value="">Select developer</option>
-                  {developers.map((developer) => (
-                    <option key={developer.id} value={developer.id}>
-                      {developer.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Linked Contract
-                <select
-                  value={taskForm.contractId}
-                  onChange={(event) =>
-                    setTaskForm((current) => ({ ...current, contractId: event.target.value }))
-                  }
-                >
-                  <option value="">Optional</option>
-                  {contracts.map((contract) => (
-                    <option key={contract.id} value={contract.id}>
-                      {contract.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="field-row">
-              <label>
-                Task Summary
-                <textarea
-                  rows={3}
-                  value={taskForm.summary}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, summary: event.target.value }))}
-                />
-              </label>
-            </div>
-            <button type="submit">Add Task</button>
-          </form>
-        </article>
-
-        <article className="panel">
-          <header className="panel-header">
             <h3>Add Contract</h3>
             <Handshake size={18} />
           </header>
@@ -1003,6 +944,118 @@ export default function Home() {
               </label>
             </div>
             <button type="submit">Add Contract</button>
+          </form>
+        </article>
+
+        <article className="panel">
+          <header className="panel-header">
+            <h3>Add Task to Any Project</h3>
+            <ListTodo size={18} />
+          </header>
+          <form className="entry-form" onSubmit={handleTaskAdd}>
+            <div className="field-row two-col">
+              <label>
+                Task Title
+                <input
+                  value={taskForm.title}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
+                />
+              </label>
+              <label>
+                Due Date
+                <input
+                  type="date"
+                  value={taskForm.dueDate}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, dueDate: event.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="field-row two-col">
+              <label>
+                Project
+                <select
+                  value={taskForm.projectId}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, projectId: event.target.value }))}
+                >
+                  <option value="">Select project</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Developer
+                <select
+                  value={taskForm.developerId}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, developerId: event.target.value }))}
+                >
+                  <option value="">Select developer</option>
+                  {developers.map((developer) => (
+                    <option key={developer.id} value={developer.id}>
+                      {developer.name} · {developer.role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="field-row three-col">
+              <label>
+                Status
+                <select
+                  value={taskForm.status}
+                  onChange={(event) =>
+                    setTaskForm((current) => ({ ...current, status: event.target.value as TaskStatus }))
+                  }
+                >
+                  <option value="Todo">Todo</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Blocked">Blocked</option>
+                  <option value="Done">Done</option>
+                </select>
+              </label>
+              <label>
+                Priority
+                <select
+                  value={taskForm.priority}
+                  onChange={(event) =>
+                    setTaskForm((current) => ({ ...current, priority: event.target.value as TaskPriority }))
+                  }
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </label>
+              <label>
+                Linked Contract
+                <select
+                  value={taskForm.contractId}
+                  onChange={(event) =>
+                    setTaskForm((current) => ({ ...current, contractId: event.target.value }))
+                  }
+                >
+                  <option value="">Optional</option>
+                  {contracts.map((contract) => (
+                    <option key={contract.id} value={contract.id}>
+                      {contract.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="field-row">
+              <label>
+                Task Summary
+                <textarea
+                  rows={3}
+                  value={taskForm.summary}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, summary: event.target.value }))}
+                />
+              </label>
+            </div>
+            <button type="submit">Add Task</button>
           </form>
         </article>
       </section>
