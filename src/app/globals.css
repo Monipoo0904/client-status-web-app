@@ -719,6 +719,30 @@ p {
   gap: 0.62rem;
 }
 
+.task-list,
+.developer-grid {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.task-item,
+.developer-card {
+  border: 1px solid rgba(38, 66, 38, 0.16);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.74);
+  padding: 0.68rem;
+}
+
+.task-meta-grid,
+.developer-meta {
+  margin-top: 0.55rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  color: var(--brand-brown);
+  font-size: 0.8rem;
+}
+
 .activity-item,
 .meeting-item {
   border: 1px solid rgba(38, 66, 38, 0.16);
@@ -815,6 +839,11 @@ p {
   .inline-form {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .task-meta-grid,
+  .developer-meta {
+    grid-template-columns: 1fr;
   }
 
   .hero-panel,
