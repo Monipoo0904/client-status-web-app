@@ -446,12 +446,14 @@ p {
 
 .entry-form input,
 .entry-form select,
+.entry-form textarea,
 .entry-form button {
   font: inherit;
 }
 
 .entry-form input,
-.entry-form select {
+.entry-form select,
+.entry-form textarea {
   border: 1px solid rgba(23, 79, 42, 0.28);
   border-radius: 0.72rem;
   background: var(--panel-strong);
@@ -460,9 +462,14 @@ p {
 }
 
 .entry-form input:focus-visible,
-.entry-form select:focus-visible {
+.entry-form select:focus-visible,
+.entry-form textarea:focus-visible {
   outline: 2px solid rgba(184, 139, 44, 0.65);
   outline-offset: 1px;
+}
+
+.entry-form textarea {
+  resize: vertical;
 }
 
 .entry-form button {
@@ -633,9 +640,17 @@ p {
 
 .task-checklist li {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   align-items: center;
   gap: 0.55rem;
+}
+
+.check-toggle {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.18rem 0.48rem;
+  font-size: 0.74rem;
+  cursor: pointer;
 }
 
 .check-pill {
@@ -664,6 +679,92 @@ p {
   background: rgba(255, 255, 255, 0.7);
   padding: 0.65rem;
   color: var(--brand-brown);
+}
+
+.inline-form {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+.inline-form input {
+  flex: 1;
+  border: 1px solid rgba(23, 79, 42, 0.28);
+  border-radius: 0.68rem;
+  background: #ffffff;
+  color: var(--text);
+  padding: 0.48rem 0.58rem;
+}
+
+.inline-form button {
+  border: 0;
+  border-radius: 0.68rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--brand-green);
+  color: #ffffff;
+  padding: 0.45rem 0.62rem;
+  cursor: pointer;
+}
+
+.inline-form button:hover {
+  filter: brightness(1.06);
+}
+
+.activity-feed,
+.meeting-list,
+.contract-stack {
+  display: grid;
+  gap: 0.62rem;
+}
+
+.activity-item,
+.meeting-item {
+  border: 1px solid rgba(38, 66, 38, 0.16);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.74);
+  padding: 0.68rem;
+}
+
+.activity-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--brand-brown);
+  font-size: 0.8rem;
+}
+
+.activity-title {
+  margin-top: 0.35rem;
+  font-weight: 700;
+}
+
+.activity-details {
+  margin-top: 0.3rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.contract-log-list {
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.contract-log-list li {
+  border: 1px solid rgba(38, 66, 38, 0.14);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.55rem;
+  color: var(--brand-brown);
+  font-size: 0.8rem;
 }
 
 @media (max-width: 1060px) {
@@ -708,7 +809,10 @@ p {
 
   .form-actions,
   .card-actions,
-  .renewal-alerts li {
+  .renewal-alerts li,
+  .activity-top,
+  .contract-log-list li,
+  .inline-form {
     flex-direction: column;
     align-items: flex-start;
   }
