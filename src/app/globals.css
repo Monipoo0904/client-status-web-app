@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #302017;
+  --background: #efefef;
+  --foreground: #3b2a1f;
   --color-brand-gold: #b07c00;
-  --color-brand-green: #043922;
-  --color-brand-sand: #e4dccb;
-  --color-brand-blue-grey: #799c9f;
-  --color-brand-brown: #302017;
-  --panel: #ffffff;
-  --panel-border: rgba(4, 57, 34, 0.14);
+  --color-brand-green: #4f392a;
+  --color-brand-sand: #e7e7e7;
+  --color-brand-blue-grey: #9b9289;
+  --color-brand-brown: #5a3f2f;
+  --panel: #f8f6f3;
+  --panel-border: rgba(90, 63, 47, 0.28);
   --ease-mvp: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -58,6 +58,7 @@ p {
   border: 1px solid var(--panel-border);
   border-radius: 0.9rem;
   background: var(--panel);
+  box-shadow: 0 8px 22px -20px rgba(48, 32, 23, 0.75);
   transition:
     transform 220ms var(--ease-mvp),
     border-color 220ms var(--ease-mvp),
@@ -78,8 +79,9 @@ p {
 
 .hero-panel {
   background:
-    radial-gradient(circle at 0% 0%, rgba(176, 124, 0, 0.08), transparent 42%),
-    radial-gradient(circle at 100% 20%, rgba(4, 57, 34, 0.08), transparent 38%),
+    linear-gradient(128deg, rgba(176, 124, 0, 0.16), rgba(4, 57, 34, 0.1)),
+    radial-gradient(circle at 0% 0%, rgba(176, 124, 0, 0.2), transparent 44%),
+    radial-gradient(circle at 100% 20%, rgba(4, 57, 34, 0.18), transparent 40%),
     var(--panel);
   padding: 1.1rem 1.2rem;
 }
@@ -91,22 +93,23 @@ p {
 }
 
 .brand-mark {
-  width: 2.8rem;
-  height: 2.8rem;
-  border-radius: 999px;
-  border: 2px solid var(--color-brand-gold);
-  color: var(--color-brand-green);
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(90, 63, 47, 0.22);
+  color: var(--color-brand-brown);
+  background: #e7e7e7;
   display: grid;
   place-items: center;
-  font-family: var(--font-heading), sans-serif;
-  font-weight: 700;
+  padding: 0.2rem;
 }
 
 .eyebrow {
   font-size: 0.72rem;
   letter-spacing: 0.12rem;
   text-transform: uppercase;
-  color: var(--color-brand-gold);
+  color: var(--color-brand-brown);
+  font-weight: 700;
 }
 
 .hero-copy {
@@ -185,6 +188,7 @@ p {
 
 .panel {
   padding: 0.9rem;
+  border-width: 1.5px;
 }
 
 .panel-header {
@@ -283,9 +287,9 @@ p {
 
 .status-chip {
   border-radius: 999px;
-  padding: 0.2rem 0.55rem;
+  padding: 0.22rem 0.62rem;
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -345,6 +349,37 @@ p {
   gap: 0.35rem;
   color: rgba(48, 32, 23, 0.84);
   font-size: 0.8rem;
+}
+
+.detail-overview-grid {
+  row-gap: 0.5rem;
+}
+
+.detail-list-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.detail-list {
+  margin: 0.45rem 0 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.35rem;
+  color: rgba(48, 32, 23, 0.88);
+  font-size: 0.9rem;
+}
+
+.notes-stack {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.note-item {
+  border: 1px solid rgba(4, 57, 34, 0.22);
+  border-left: 5px solid var(--color-brand-gold);
+  border-radius: 0.68rem;
+  background: #fff;
+  padding: 0.72rem;
 }
 
 .progress-row {

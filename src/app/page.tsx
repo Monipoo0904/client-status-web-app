@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import MyVillageLogo from "@/components/myvillage-logo";
 import {
   BriefcaseBusiness,
   CheckCircle2,
@@ -488,7 +489,7 @@ export default function Home() {
         >
           <div className="brand-row">
             <div className="brand-mark" aria-hidden="true">
-              <span>MV</span>
+              <MyVillageLogo size={50} />
             </div>
             <div>
               <p className="eyebrow">MyVillage Project</p>
