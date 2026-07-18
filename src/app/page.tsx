@@ -1,11 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BriefcaseBusiness,
   CheckCircle2,
-  ClipboardPen,
   FileText,
   Handshake,
   ListTodo,
@@ -66,15 +66,6 @@ type Task = {
   dueDate: string;
   developerId: string;
   contractId: string;
-};
-
-type MeetingNote = {
-  id: string;
-  title: string;
-  meetingDate: string;
-  attendees: string;
-  notes: string;
-  createdAt: string;
 };
 
 const seedDevelopers: Developer[] = [
@@ -186,17 +177,6 @@ const seedTasks: Task[] = [
   }
 ];
 
-const initialMeetings: MeetingNote[] = [
-  {
-    id: "M-001",
-    title: "Weekly Client Sync",
-    meetingDate: "2026-07-16",
-    attendees: "Ari M., Client PM, Tech Lead",
-    notes: "Aligned on deployment timeline and demo scope.",
-    createdAt: "2026-07-16T18:20:00.000Z"
-  }
-];
-
 function formatDateTime(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
@@ -269,12 +249,7 @@ export default function Home() {
   const [projects, setProjects] = useState<Project[]>(seedProjects);
   const [contracts, setContracts] = useState<Contract[]>(seedContracts);
   const [tasks, setTasks] = useState<Task[]>(seedTasks);
-  const [expandedProjectIds, setExpandedProjectIds] = useState<Record<string, boolean>>({
-    "PRJ-101": true,
-    "PRJ-108": false
-  });
   const [contractDrafts, setContractDrafts] = useState<Record<string, string>>({});
-  const [meetingNotes, setMeetingNotes] = useState<MeetingNote[]>(initialMeetings);
 
   const [projectForm, setProjectForm] = useState({
     name: "",
@@ -313,13 +288,6 @@ export default function Home() {
     capacity: 70
   });
 
-  const [meetingForm, setMeetingForm] = useState({
-    title: "",
-    meetingDate: "",
-    attendees: "",
-    notes: ""
-  });
-
   const developerLookup = useMemo(() => new Map(developers.map((d) => [d.id, d])), [developers]);
   const contractLookup = useMemo(() => new Map(contracts.map((c) => [c.id, c])), [contracts]);
 
@@ -355,22 +323,10 @@ export default function Home() {
       }))
     );
 
-    const meetingActivity = meetingNotes.map((meeting) => ({
-      id: `meeting-${meeting.id}`,
-      type: "Meeting Note",
-      title: meeting.title,
-      details: meeting.notes,
-      createdAt: meeting.createdAt
-    }));
-
-    return [...contractActivity, ...meetingActivity].sort(
+    return [...contractActivity].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [contracts, meetingNotes]);
-
-  const toggleProjectExpanded = (projectId: string) => {
-    setExpandedProjectIds((current) => ({ ...current, [projectId]: !current[projectId] }));
-  };
+  }, [contracts]);
 
   const handleDeveloperAdd = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -417,7 +373,6 @@ export default function Home() {
       ...current
     ]);
 
-    setExpandedProjectIds((current) => ({ ...current, [nextId]: true }));
     setProjectForm({
       name: "",
       client: "",
@@ -523,33 +478,6 @@ export default function Home() {
     setContractDrafts((current) => ({ ...current, [contractId]: "" }));
   };
 
-  const handleMeetingAdd = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!meetingForm.title || !meetingForm.meetingDate || !meetingForm.notes) {
-      return;
-    }
-
-    const createdAt = new Date().toISOString();
-    setMeetingNotes((current) => [
-      {
-        id: `M-${Date.now()}`,
-        title: meetingForm.title,
-        meetingDate: meetingForm.meetingDate,
-        attendees: meetingForm.attendees || "Not specified",
-        notes: meetingForm.notes,
-        createdAt
-      },
-      ...current
-    ]);
-
-    setMeetingForm({
-      title: "",
-      meetingDate: "",
-      attendees: "",
-      notes: ""
-    });
-  };
-
   return (
     <main className="dashboard-shell">
       <section className="hero-panel">
@@ -590,37 +518,30 @@ export default function Home() {
           <div className="sidebar-project-list">
             {projectOverview.map(({ project, tasks: pTasks, contracts: pContracts, openTasks }) => (
               <article key={project.id} className="sidebar-project-item">
-                <button
-                  type="button"
-                  className="sidebar-project-toggle"
-                  onClick={() => toggleProjectExpanded(project.id)}
-                >
+                <Link className="sidebar-project-toggle" href={`/projects/${project.id}`}>
                   <div>
                     <p className="project-id">{project.id}</p>
                     <h4>{project.name}</h4>
                     <p className="project-meta">{project.client}</p>
                   </div>
                   <span className={statusChipClass(project.status)}>{project.status}</span>
-                </button>
-
-                {expandedProjectIds[project.id] ? (
-                  <div className="sidebar-project-details">
-                    <p>
-                      <strong>Owner:</strong> {developerLookup.get(project.ownerDeveloperId)?.name ?? "Unknown"}
-                    </p>
-                    <p>
-                      <strong>Tasks:</strong> {pTasks.length} ({openTasks} open)
-                    </p>
-                    <p>
-                      <strong>Contracts:</strong> {pContracts.length}
-                    </p>
-                    <ul>
-                      {pTasks.slice(0, 3).map((task) => (
-                        <li key={task.id}>{task.title}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
+                </Link>
+                <div className="sidebar-project-details">
+                  <p>
+                    <strong>Owner:</strong> {developerLookup.get(project.ownerDeveloperId)?.name ?? "Unknown"}
+                  </p>
+                  <p>
+                    <strong>Tasks:</strong> {pTasks.length} ({openTasks} open)
+                  </p>
+                  <p>
+                    <strong>Contracts:</strong> {pContracts.length}
+                  </p>
+                  <ul>
+                    {pTasks.slice(0, 3).map((task) => (
+                      <li key={task.id}>{task.title}</li>
+                    ))}
+                  </ul>
+                </div>
               </article>
             ))}
           </div>
@@ -638,7 +559,9 @@ export default function Home() {
                   <div className="contract-top">
                     <div>
                       <p className="project-id">{project.id}</p>
-                      <h3>{project.name}</h3>
+                      <h3>
+                        <Link href={`/projects/${project.id}`}>{project.name}</Link>
+                      </h3>
                       <p className="project-meta">{project.summary}</p>
                     </div>
                     <span className={statusChipClass(project.status)}>{project.status}</span>
@@ -1083,60 +1006,7 @@ export default function Home() {
         </article>
       </section>
 
-      <section className="uniform-two-col motion-section delay-5">
-        <article className="panel">
-          <header className="panel-header">
-            <h3>Meeting Notes Recorder</h3>
-            <ClipboardPen size={18} />
-          </header>
-          <form className="entry-form" onSubmit={handleMeetingAdd}>
-            <div className="field-row two-col">
-              <label>
-                Meeting Title
-                <input
-                  value={meetingForm.title}
-                  onChange={(event) =>
-                    setMeetingForm((current) => ({ ...current, title: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                Meeting Date
-                <input
-                  type="date"
-                  value={meetingForm.meetingDate}
-                  onChange={(event) =>
-                    setMeetingForm((current) => ({ ...current, meetingDate: event.target.value }))
-                  }
-                />
-              </label>
-            </div>
-            <div className="field-row">
-              <label>
-                Attendees
-                <input
-                  value={meetingForm.attendees}
-                  onChange={(event) =>
-                    setMeetingForm((current) => ({ ...current, attendees: event.target.value }))
-                  }
-                  placeholder="Name, Name, Name"
-                />
-              </label>
-            </div>
-            <div className="field-row">
-              <label>
-                Notes
-                <textarea
-                  rows={4}
-                  value={meetingForm.notes}
-                  onChange={(event) => setMeetingForm((current) => ({ ...current, notes: event.target.value }))}
-                />
-              </label>
-            </div>
-            <button type="submit">Save Meeting Note</button>
-          </form>
-        </article>
-
+      <section className="motion-section delay-5">
         <article className="panel">
           <header className="panel-header">
             <h3>Centralized Activity Feed</h3>

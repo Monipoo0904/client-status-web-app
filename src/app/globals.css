@@ -250,6 +250,37 @@ p {
   font-size: 0.84rem;
 }
 
+.project-overview-card h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.project-overview-card h3 a:hover {
+  color: var(--color-brand-green);
+}
+
+.project-page-shell {
+  margin-top: 1.2rem;
+}
+
+.project-page-back-row {
+  margin-bottom: 0.55rem;
+}
+
+.project-page-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  color: var(--color-brand-green);
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+
+.project-page-back-link:hover {
+  color: #032b1a;
+}
+
 .status-chip {
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
