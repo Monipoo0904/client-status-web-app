@@ -14,7 +14,26 @@ export type Developer = {
   capacity: number;
   email: string;
   slackHandle: string;
+  skills: string[];
 };
+
+export const SKILL_OPTIONS = [
+  "React",
+  "Next.js",
+  "TypeScript",
+  "Node.js",
+  "Python",
+  "Swift",
+  "Kotlin",
+  "SQL / Databases",
+  "API Design",
+  "DevOps",
+  "QA / Testing",
+  "UI/UX Design",
+  "Figma",
+  "Product Design",
+  "Data Engineering"
+] as const;
 
 export type Project = {
   id: string;
@@ -94,7 +113,8 @@ export const seedDevelopers: Developer[] = [
     focus: "Delivery and client sync",
     capacity: 80,
     email: "ari@myvillage.app",
-    slackHandle: "@ari"
+    slackHandle: "@ari",
+    skills: ["Product Design", "API Design"]
   },
   {
     id: "DEV-002",
@@ -103,7 +123,8 @@ export const seedDevelopers: Developer[] = [
     focus: "UI and dashboard modules",
     capacity: 75,
     email: "nia@myvillage.app",
-    slackHandle: "@nia"
+    slackHandle: "@nia",
+    skills: ["React", "TypeScript", "UI/UX Design"]
   },
   {
     id: "DEV-003",
@@ -112,7 +133,8 @@ export const seedDevelopers: Developer[] = [
     focus: "Data APIs and automation",
     capacity: 70,
     email: "theo@myvillage.app",
-    slackHandle: "@theo"
+    slackHandle: "@theo",
+    skills: ["Node.js", "Python", "SQL / Databases"]
   },
   {
     id: "DEV-004",
@@ -121,7 +143,8 @@ export const seedDevelopers: Developer[] = [
     focus: "Client follow-through and work routing",
     capacity: 65,
     email: "delali@myvillage.app",
-    slackHandle: "@delali"
+    slackHandle: "@delali",
+    skills: ["QA / Testing", "API Design"]
   },
   {
     id: "DEV-005",
@@ -130,7 +153,8 @@ export const seedDevelopers: Developer[] = [
     focus: "Victory Village build",
     capacity: 75,
     email: "monique@scratchwerk.tech",
-    slackHandle: "@monique.reed"
+    slackHandle: "@monique.reed",
+    skills: ["React", "TypeScript", "Node.js"]
   },
   {
     id: "DEV-006",
@@ -139,7 +163,8 @@ export const seedDevelopers: Developer[] = [
     focus: "Client content intake: transcripts and meeting notes",
     capacity: 60,
     email: "hana@victoryvillage.app",
-    slackHandle: "@hana.elbatouty"
+    slackHandle: "@hana.elbatouty",
+    skills: ["QA / Testing"]
   },
   {
     id: "DEV-007",
@@ -148,7 +173,8 @@ export const seedDevelopers: Developer[] = [
     focus: "Executive oversight and approvals",
     capacity: 40,
     email: "ronnie@victoryvillage.app",
-    slackHandle: "@ronnie.king"
+    slackHandle: "@ronnie.king",
+    skills: ["Product Design"]
   }
 ];
 

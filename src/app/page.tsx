@@ -10,13 +10,16 @@ import {
   Handshake,
   ListTodo,
   Mail,
+  Pencil,
   Slack,
   Sparkles,
+  Trash2,
   UsersRound
 } from "lucide-react";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import MyVillageLogo from "@/components/myvillage-logo";
 import {
+  SKILL_OPTIONS,
   seedContracts,
   seedDevelopers,
   seedProjects,
@@ -174,7 +177,17 @@ export default function Home() {
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowSource[]>([]);
   const [contractDrafts, setContractDrafts] = useState<Record<string, string>>({});
   const [selectedContractId, setSelectedContractId] = useState(seedContracts[0]?.id ?? "");
+  const [activeProjectId, setActiveProjectId] = useState<string>("all");
   const [workflowMessage, setWorkflowMessage] = useState("");
+  const [rosterMessage, setRosterMessage] = useState("");
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [projectEditForm, setProjectEditForm] = useState({
+    name: "",
+    client: "",
+    status: "On Track" as ProjectStatus,
+    ownerDeveloperId: "",
+    summary: ""
+  });
 
   const [workflowForm, setWorkflowForm] = useState({
     sourceType: "Meeting Email" as WorkflowSource["sourceType"],
@@ -221,7 +234,8 @@ export default function Home() {
     name: "",
     role: "",
     focus: "",
-    capacity: 70
+    capacity: 70,
+    skills: [] as string[]
   });
 
   const developerLookup = useMemo(() => new Map(developers.map((developer) => [developer.id, developer])), [developers]);
@@ -346,7 +360,8 @@ export default function Home() {
         focus: developerForm.focus || "General",
         capacity: Number(developerForm.capacity),
         email: `${safeName}@myvillage.app`,
-        slackHandle: `@${safeName.replace(/\./g, "")}`
+        slackHandle: `@${safeName}`,
+        skills: developerForm.skills
       },
       ...current
     ]);
@@ -355,8 +370,28 @@ export default function Home() {
       name: "",
       role: "",
       focus: "",
-      capacity: 70
+      capacity: 70,
+      skills: []
     });
+  };
+
+  const handleDeveloperRemove = (developerId: string) => {
+    const isOwner =
+      contracts.some((contract) => contract.ownerDeveloperId === developerId) ||
+      projects.some((project) => project.ownerDeveloperId === developerId);
+
+    if (isOwner) {
+      setRosterMessage("Reassign this person's contracts/projects to another owner before removing them.");
+      return;
+    }
+
+    setDevelopers((current) => current.filter((developer) => developer.id !== developerId));
+    setTasks((current) =>
+      current.map((task) =>
+        task.developerId === developerId ? { ...task, developerId: null, awaitingAssignment: true } : task
+      )
+    );
+    setRosterMessage("");
   };
 
   const handleProjectAdd = (event: FormEvent<HTMLFormElement>) => {
@@ -387,6 +422,68 @@ export default function Home() {
       ownerDeveloperId: "",
       summary: ""
     });
+  };
+
+  const notifySlackUpdate = (contractId: string, text: string) => {
+    const contract = contractLookup.get(contractId);
+    if (!contract?.slackChannelId) {
+      return;
+    }
+
+    fetch("/api/notifications/slack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, channel: contract.slackChannelId })
+    }).catch(() => {
+      setWorkflowMessage("Slack notification failed to send.");
+    });
+  };
+
+  const handleProjectEditStart = (project: Project) => {
+    setEditingProjectId(project.id);
+    setProjectEditForm({
+      name: project.name,
+      client: project.client,
+      status: project.status,
+      ownerDeveloperId: project.ownerDeveloperId,
+      summary: project.summary
+    });
+  };
+
+  const handleProjectEditCancel = () => {
+    setEditingProjectId(null);
+  };
+
+  const handleProjectEditSave = (event: FormEvent<HTMLFormElement>, projectId: string) => {
+    event.preventDefault();
+    if (!projectEditForm.name || !projectEditForm.client || !projectEditForm.ownerDeveloperId) {
+      return;
+    }
+
+    const project = projects.find((item) => item.id === projectId);
+    setProjects((current) =>
+      current.map((item) =>
+        item.id === projectId
+          ? {
+              ...item,
+              name: projectEditForm.name,
+              client: projectEditForm.client,
+              status: projectEditForm.status,
+              ownerDeveloperId: projectEditForm.ownerDeveloperId,
+              summary: projectEditForm.summary
+            }
+          : item
+      )
+    );
+
+    if (project) {
+      notifySlackUpdate(
+        project.contractId,
+        `:pencil2: Project *${projectEditForm.name}* updated — status now ${projectEditForm.status}.`
+      );
+    }
+
+    setEditingProjectId(null);
   };
 
   const handleContractAdd = (event: FormEvent<HTMLFormElement>) => {
@@ -569,6 +666,10 @@ export default function Home() {
       )
     );
     setContractDrafts((current) => ({ ...current, [contractId]: "" }));
+
+    const contract = contractLookup.get(contractId);
+    const author = contract ? developerLookup.get(contract.ownerDeveloperId)?.name ?? "System" : "System";
+    notifySlackUpdate(contractId, `:memo: Progress update on *${contract?.name ?? contractId}* from ${author}: ${draft}`);
   };
 
   const handleWorkflowRun = async (event: FormEvent<HTMLFormElement>) => {
@@ -687,6 +788,10 @@ export default function Home() {
       setWorkflowMessage(
         `Workflow complete: ${generatedTasks.length} task${generatedTasks.length === 1 ? "" : "s"} created for ${typedPayload.organization}.${warnings}`
       );
+      notifySlackUpdate(
+        selectedFolder.contract.id,
+        `:rocket: ${typedPayload.sourceType} ingested for *${typedPayload.organization}* — ${generatedTasks.length} new task${generatedTasks.length === 1 ? "" : "s"} created, status set to ${typedPayload.statusSuggestion}.`
+      );
       setWorkflowForm((current) => ({
         ...current,
         sourceId: "",
@@ -742,6 +847,7 @@ export default function Home() {
                   className={`sidebar-project-toggle${selectedFolder?.contract.id === folder.contract.id ? " is-active" : ""}`}
                   onClick={() => {
                     setSelectedContractId(folder.contract.id);
+                    setActiveProjectId("all");
                     setProjectForm((current) => ({ ...current, contractId: folder.contract.id }));
                     setTaskForm((current) => ({
                       ...current,
@@ -961,32 +1067,141 @@ export default function Home() {
               <h3>Projects In This Workspace</h3>
               <CheckCircle2 size={18} />
             </header>
+            <div className="tag-row">
+              <button
+                type="button"
+                className={`status-chip ${activeProjectId === "all" ? "status-on-track" : "contract-pending"}`}
+                onClick={() => setActiveProjectId("all")}
+              >
+                All projects
+              </button>
+              {selectedFolder?.projects.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  className={`status-chip ${activeProjectId === project.id ? "status-on-track" : "contract-pending"}`}
+                  onClick={() => setActiveProjectId(project.id)}
+                >
+                  {project.name}
+                </button>
+              ))}
+            </div>
             <div className="project-overview-grid" role="list">
               {projectOverview
                 .filter(({ project }) => project.contractId === selectedFolder?.contract.id)
-                .map(({ project, tasks: projectTasks, progressPct, contract, openTasks }) => (
-                  <article key={project.id} className="project-overview-card" role="listitem">
-                    <div className="contract-top">
-                      <div>
-                        <p className="project-id">{project.id}</p>
-                        <h3>
-                          <Link href={`/projects/${project.id}`}>{project.name}</Link>
-                        </h3>
-                        <p className="project-meta">{project.summary}</p>
+                .map(({ project, tasks: projectTasks, progressPct, contract, openTasks }) =>
+                  editingProjectId === project.id ? (
+                    <form
+                      key={project.id}
+                      className="entry-form project-overview-card"
+                      onSubmit={(event) => handleProjectEditSave(event, project.id)}
+                    >
+                      <div className="field-row two-col">
+                        <label>
+                          Project Name
+                          <input
+                            value={projectEditForm.name}
+                            onChange={(event) =>
+                              setProjectEditForm((current) => ({ ...current, name: event.target.value }))
+                            }
+                          />
+                        </label>
+                        <label>
+                          Client
+                          <input
+                            value={projectEditForm.client}
+                            onChange={(event) =>
+                              setProjectEditForm((current) => ({ ...current, client: event.target.value }))
+                            }
+                          />
+                        </label>
                       </div>
-                      <span className={statusChipClass(project.status)}>{project.status}</span>
-                    </div>
-                    <div className="progress-row">
-                      <span>{contract?.organization ?? "Contract"}</span>
-                      <strong>{progressPct}%</strong>
-                    </div>
-                    <ProgressBar value={progressPct} />
-                    <div className="task-meta-grid">
-                      <span>Total tasks: {projectTasks.length}</span>
-                      <span>Open tasks: {openTasks}</span>
-                    </div>
-                  </article>
-                ))}
+                      <div className="field-row two-col">
+                        <label>
+                          Status
+                          <select
+                            value={projectEditForm.status}
+                            onChange={(event) =>
+                              setProjectEditForm((current) => ({
+                                ...current,
+                                status: event.target.value as ProjectStatus
+                              }))
+                            }
+                          >
+                            <option value="On Track">On Track</option>
+                            <option value="At Risk">At Risk</option>
+                            <option value="Blocked">Blocked</option>
+                            <option value="Done">Done</option>
+                          </select>
+                        </label>
+                        <label>
+                          Owner
+                          <select
+                            value={projectEditForm.ownerDeveloperId}
+                            onChange={(event) =>
+                              setProjectEditForm((current) => ({ ...current, ownerDeveloperId: event.target.value }))
+                            }
+                          >
+                            <option value="">Select developer</option>
+                            {developers.map((developer) => (
+                              <option key={developer.id} value={developer.id}>
+                                {developer.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <label>
+                        Summary
+                        <textarea
+                          rows={2}
+                          value={projectEditForm.summary}
+                          onChange={(event) =>
+                            setProjectEditForm((current) => ({ ...current, summary: event.target.value }))
+                          }
+                        />
+                      </label>
+                      <div className="tag-row">
+                        <button type="submit">Save</button>
+                        <button type="button" className="button-secondary" onClick={handleProjectEditCancel}>
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <article key={project.id} className="project-overview-card" role="listitem">
+                      <div className="contract-top">
+                        <div>
+                          <p className="project-id">{project.id}</p>
+                          <h3>
+                            <Link href={`/projects/${project.id}`}>{project.name}</Link>
+                          </h3>
+                          <p className="project-meta">{project.summary}</p>
+                        </div>
+                        <div className="tag-row">
+                          <span className={statusChipClass(project.status)}>{project.status}</span>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            aria-label={`Edit ${project.name}`}
+                            onClick={() => handleProjectEditStart(project)}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="progress-row">
+                        <span>{contract?.organization ?? "Contract"}</span>
+                        <strong>{progressPct}%</strong>
+                      </div>
+                      <ProgressBar value={progressPct} />
+                      <div className="task-meta-grid">
+                        <span>Total tasks: {projectTasks.length}</span>
+                        <span>Open tasks: {openTasks}</span>
+                      </div>
+                    </article>
+                  )
+                )}
             </div>
           </article>
 
@@ -998,7 +1213,11 @@ export default function Home() {
               </header>
               <div className="task-list" role="list">
                 {tasks
-                  .filter((task) => task.contractId === selectedFolder?.contract.id)
+                  .filter(
+                    (task) =>
+                      task.contractId === selectedFolder?.contract.id &&
+                      (activeProjectId === "all" || task.projectId === activeProjectId)
+                  )
                   .map((task) => (
                     <article key={task.id} className="task-item" role="listitem">
                       <div className="contract-top">
@@ -1108,6 +1327,57 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="motion-section delay-3">
+        <article className="panel">
+          <header className="panel-header">
+            <h3>Team Roster</h3>
+            <UsersRound size={18} />
+          </header>
+          <p className="helper-copy">All developers across every contract folder. Remove someone and their open tasks fall back to &quot;assign later&quot;.</p>
+          {rosterMessage ? <p className="workflow-message">{rosterMessage}</p> : null}
+          <div className="developer-grid" role="list">
+            {developers.map((developer) => (
+              <article key={developer.id} className="task-item" role="listitem">
+                <div className="contract-top">
+                  <div>
+                    <p className="project-id">{developer.id}</p>
+                    <h3>{developer.name}</h3>
+                    <p className="project-meta">{developer.role}</p>
+                  </div>
+                  <div className="tag-row">
+                    <span className="status-chip status-on-track">{developer.capacity}% capacity</span>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label={`Remove ${developer.name}`}
+                      onClick={() => handleDeveloperRemove(developer.id)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div className="task-meta-grid">
+                  <span>Focus: {developer.focus}</span>
+                  <span>Email: {developer.email}</span>
+                  <span>Slack: {developer.slackHandle}</span>
+                </div>
+                <div className="tag-row">
+                  {developer.skills.length ? (
+                    developer.skills.map((skill) => (
+                      <span key={skill} className="status-chip contract-pending">
+                        {skill}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="status-chip contract-pending">No skills tagged</span>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </article>
+      </section>
+
       <section className="builder-grid motion-section delay-3">
         <article className="panel">
           <header className="panel-header">
@@ -1158,6 +1428,26 @@ export default function Home() {
                 />
               </label>
             </div>
+            <label>
+              Skills
+              <select
+                multiple
+                value={developerForm.skills}
+                onChange={(event) =>
+                  setDeveloperForm((current) => ({
+                    ...current,
+                    skills: Array.from(event.target.selectedOptions, (option) => option.value)
+                  }))
+                }
+                size={5}
+              >
+                {SKILL_OPTIONS.map((skill) => (
+                  <option key={skill} value={skill}>
+                    {skill}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button type="submit">Add Developer</button>
           </form>
         </article>
