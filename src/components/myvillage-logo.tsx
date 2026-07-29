@@ -14,13 +14,16 @@ export default function MyVillageLogo({ size = 52, className }: MyVillageLogoPro
       aria-label="MyVillage logo"
       className={className}
     >
-      <rect x="14" y="20" width="10" height="56" rx="2" fill="currentColor" />
-      <rect x="72" y="20" width="10" height="56" rx="2" fill="currentColor" />
+      <rect x="4" y="4" width="88" height="88" rx="24" fill="currentColor" fillOpacity="0.12" />
+      <rect x="4" y="4" width="88" height="88" rx="24" stroke="currentColor" strokeWidth="4" />
       <path
-        d="M31 20H39L48 34L57 20H65V37L50.6 59.2C49.8 60.4 48.2 60.4 47.4 59.2L31 35V20Z"
-        fill="currentColor"
+        d="M22 64L40 40L52 54L74 26"
+        stroke="currentColor"
+        strokeWidth="7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      <circle cx="48" cy="16" r="6.2" fill="currentColor" />
+      <circle cx="74" cy="26" r="6" fill="currentColor" />
     </svg>
   );
 }

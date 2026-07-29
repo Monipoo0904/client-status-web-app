@@ -46,6 +46,7 @@ export type Contract = {
   workflowMode: "Email First" | "Transcript Assisted";
   workflowNotes: string;
   progress: ContractProgressEntry[];
+  slackChannelId?: string;
 };
 
 export type Task = {
@@ -124,12 +125,30 @@ export const seedDevelopers: Developer[] = [
   },
   {
     id: "DEV-005",
-    name: "Monique",
+    name: "Monique Reed",
     role: "Developer",
     focus: "Victory Village build",
     capacity: 75,
     email: "monique@scratchwerk.tech",
-    slackHandle: "@monique"
+    slackHandle: "@monique.reed"
+  },
+  {
+    id: "DEV-006",
+    name: "Hana Elbatouty",
+    role: "Implementation Coordinator",
+    focus: "Client content intake: transcripts and meeting notes",
+    capacity: 60,
+    email: "hana@victoryvillage.app",
+    slackHandle: "@hana.elbatouty"
+  },
+  {
+    id: "DEV-007",
+    name: "Ronnie King",
+    role: "CEO",
+    focus: "Executive oversight and approvals",
+    capacity: 40,
+    email: "ronnie@victoryvillage.app",
+    slackHandle: "@ronnie.king"
   }
 ];
 
@@ -197,7 +216,14 @@ export const seedContracts: Contract[] = [
     workflowMode: "Email First",
     workflowNotes:
       "Hana pastes call transcriptions and email notes directly into the Automation Intake form for this folder; treat her email recap notes as the primary source and transcripts as supporting context.",
+    slackChannelId: "C0BD1PENTLH",
     progress: [
+      {
+        id: "p6",
+        note: "Backfilled the Hana presentation meeting from last month (front end priority, prototype weave-together, book content/copyright, connections feature, village difficulty levels) into 8 unassigned tasks for the team to triage.",
+        createdAt: "2026-07-29T17:49:55.000Z",
+        author: "Workflow Bot"
+      },
       {
         id: "p5",
         note: "Ingested Monique's July 29 meeting recap and created 4 tasks: avatar customization, SVG handoff, asset publishing, and FLE reading-level scoring. Next meeting scheduled for August 20, 2026.",
@@ -365,6 +391,118 @@ export const seedTasks: Task[] = [
     notificationPreference: "Email",
     source: "Meeting Email",
     awaitingAssignment: false
+  },
+  {
+    id: "TASK-009",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Front end has been the priority",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: null,
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: true
+  },
+  {
+    id: "TASK-010",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Back end will be next in the priority.",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: null,
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: true
+  },
+  {
+    id: "TASK-011",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Weave together screens into a prototype",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: null,
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: true
+  },
+  {
+    id: "TASK-012",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Book Passage Access: Please connect with April on Book Content Database.",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: null,
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: true
+  },
+  {
+    id: "TASK-013",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Passages may not come with question so we will send questions for review",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: null,
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: true
+  },
+  {
+    id: "TASK-014",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Village Storylines: is under review for more detailed discussion for app",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: null,
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: true
+  },
+  {
+    id: "TASK-015",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Connections feature: Create community within the app",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: null,
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: true
+  },
+  {
+    id: "TASK-016",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Incorporate new difficulty levels within cyclone and sky villages.",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: null,
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: true
   }
 ];
 

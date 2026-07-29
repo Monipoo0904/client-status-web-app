@@ -46,16 +46,89 @@ export function deriveSourceId(sourceType: IngestionSourceType, organization: st
   return `${sourceType.toLowerCase().replace(/\s+/g, "-")}-${digest}`;
 }
 
+const ACTION_SECTION_HEADER_PATTERN = /^(next steps?|action steps?|to-?dos?|follow[- ]?ups?)\s*:?\s*(.*)$/i;
+const SECTION_HEADER_LINE_PATTERN = /^[A-Za-z][A-Za-z /]*:$/;
+const SPEAKER_PREFIX_PATTERN = /^([A-Z]\.){1,3}:?\s*/;
+const DISCUSSION_LEAD_PATTERN =
+  /^(how|what|why|when|where|should|does|is|are|do|did|can|would|could|discussion on|q\/?a|note|options?)\b/i;
+const ACTION_VERB_PATTERN =
+  /\b(connect|send|review|confirm|schedule|finalize|create|build|follow up|incorporate|expand|prepare|provide|submit|share|deliver|weave|publish|customize|coordinate|monitor|set up|update|draft)\b/i;
+
+function stripSpeakerPrefix(line: string) {
+  return line.replace(SPEAKER_PREFIX_PATTERN, "").trim();
+}
+
+function isLikelyDiscussionLine(line: string) {
+  if (!line) {
+    return true;
+  }
+
+  if (line.endsWith("?")) {
+    return true;
+  }
+
+  return DISCUSSION_LEAD_PATTERN.test(line);
+}
+
+function extractFromActionSections(lines: string[]) {
+  const items: string[] = [];
+  let collecting = false;
+
+  for (const line of lines) {
+    const headerMatch = line.match(ACTION_SECTION_HEADER_PATTERN);
+    if (headerMatch) {
+      collecting = true;
+      const inlineRemainder = stripSpeakerPrefix(headerMatch[2] ?? "");
+      if (inlineRemainder && !isLikelyDiscussionLine(inlineRemainder)) {
+        items.push(inlineRemainder);
+      }
+      continue;
+    }
+
+    if (!collecting) {
+      continue;
+    }
+
+    if (!line || SECTION_HEADER_LINE_PATTERN.test(line)) {
+      collecting = false;
+      continue;
+    }
+
+    const cleaned = stripSpeakerPrefix(line);
+    if (!isLikelyDiscussionLine(cleaned)) {
+      items.push(cleaned);
+    }
+  }
+
+  return items;
+}
+
+function extractActionVerbLines(lines: string[]) {
+  return lines
+    .map((line) => stripSpeakerPrefix(line))
+    .filter((line) => line.length >= 15 && line.length <= 140)
+    .filter((line) => !isLikelyDiscussionLine(line))
+    .filter((line) => ACTION_VERB_PATTERN.test(line));
+}
+
 export function extractActionItems(rawText: string) {
-  const bulletMatches = rawText
-    .split("\n")
-    .map((line) => line.trim())
+  const lines = rawText.split("\n").map((line) => line.trim());
+
+  const bulletMatches = lines
     .filter((line) => /^([-*•]|\d+[.)])\s+/.test(line))
     .map((line) => line.replace(/^([-*•]|\d+[.)])\s+/, ""))
     .filter(Boolean);
 
   if (bulletMatches.length) {
     return bulletMatches;
+  }
+
+  const sectionItems = extractFromActionSections(lines);
+  const scannedItems = extractActionVerbLines(lines);
+  const combined = Array.from(new Set([...sectionItems, ...scannedItems].filter(Boolean)));
+
+  if (combined.length) {
+    return combined.slice(0, 8);
   }
 
   return rawText

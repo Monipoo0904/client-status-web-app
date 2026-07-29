@@ -291,10 +291,10 @@ export default function Home() {
   const openTaskCount = tasks.length - taskDoneCount;
   const unassignedTaskCount = tasks.filter((task) => !task.developerId).length;
   const taskStatusSegments: TaskSummary[] = [
-    { label: "Todo", count: tasks.filter((task) => task.status === "Todo").length, color: "#b07c00" },
-    { label: "In Progress", count: tasks.filter((task) => task.status === "In Progress").length, color: "#4f392a" },
-    { label: "Blocked", count: tasks.filter((task) => task.status === "Blocked").length, color: "#8a6200" },
-    { label: "Done", count: tasks.filter((task) => task.status === "Done").length, color: "#1f5b3d" }
+    { label: "Todo", count: tasks.filter((task) => task.status === "Todo").length, color: "#9c6a00" },
+    { label: "In Progress", count: tasks.filter((task) => task.status === "In Progress").length, color: "#0f6a41" },
+    { label: "Blocked", count: tasks.filter((task) => task.status === "Blocked").length, color: "#8a3030" },
+    { label: "Done", count: tasks.filter((task) => task.status === "Done").length, color: "#0b4d30" }
   ];
 
   const activityFeed = useMemo(() => {
@@ -435,6 +435,7 @@ export default function Home() {
       return;
     }
 
+    const dueDate = taskForm.dueDate || new Date().toISOString().slice(0, 10);
     setTasks((current) => [
       {
         id: `TASK-${Date.now()}`,
@@ -444,7 +445,7 @@ export default function Home() {
         summary: taskForm.summary || "No summary provided.",
         status: taskForm.status,
         priority: taskForm.priority,
-        dueDate: taskForm.dueDate || new Date().toISOString().slice(0, 10),
+        dueDate,
         developerId: taskForm.developerId || null,
         notificationPreference: taskForm.notificationPreference,
         source: "Manual",
@@ -452,6 +453,14 @@ export default function Home() {
       },
       ...current
     ]);
+
+    if (taskForm.developerId) {
+      notifySlackAssignment(
+        { title: taskForm.title, dueDate, notificationPreference: taskForm.notificationPreference },
+        taskForm.developerId,
+        taskForm.contractId
+      );
+    }
 
     const nextProjectId = projects.find((project) => project.contractId === taskForm.contractId)?.id ?? "";
     setTaskForm({
@@ -467,6 +476,36 @@ export default function Home() {
     });
   };
 
+  const notifySlackAssignment = (
+    task: { title: string; dueDate: string; notificationPreference: NotificationChannel },
+    developerId: string,
+    contractId: string
+  ) => {
+    if (task.notificationPreference !== "Slack") {
+      return;
+    }
+
+    const developer = developerLookup.get(developerId);
+    if (!developer) {
+      return;
+    }
+
+    const contract = contractLookup.get(contractId);
+    if (!contract?.slackChannelId) {
+      return;
+    }
+
+    const text = `:bell: ${developer.slackHandle} you've been assigned *${task.title}* for ${contract.organization}. Due ${task.dueDate}.`;
+
+    fetch("/api/notifications/slack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, channel: contract.slackChannelId })
+    }).catch(() => {
+      setWorkflowMessage("Slack notification failed to send.");
+    });
+  };
+
   const handleTaskAssignment = (taskId: string, developerId: string) => {
     setTasks((current) =>
       current.map((task) =>
@@ -479,6 +518,15 @@ export default function Home() {
           : task
       )
     );
+
+    if (!developerId) {
+      return;
+    }
+
+    const task = tasks.find((item) => item.id === taskId);
+    if (task) {
+      notifySlackAssignment(task, developerId, task.contractId);
+    }
   };
 
   const handleTaskNotification = (taskId: string, notificationPreference: NotificationChannel) => {

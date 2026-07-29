@@ -6,7 +6,10 @@
       "Bash(node -e 'let d=\"\";process.stdin.on\\(\"data\",c=>d+=c\\);process.stdin.on\\(\"end\",\\(\\)=>console.log\\(JSON.stringify\\(JSON.parse\\(d\\),null,2\\)\\)\\)')",
       "Bash(npx tsc *)",
       "Bash(curl -s http://localhost:3000 -o /tmp/home2.html -w \"%{http_code}\\\\n\")",
-      "Bash(pkill -f \"next dev\")"
+      "Bash(pkill -f \"next dev\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/ingestion/meeting-notes -H 'Content-Type: application/json' --data-binary @/tmp/vv-messy-payload.json)",
+      "Bash(npm run *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/notifications/slack -H \"Content-Type: application/json\" -d '{\"text\":\"test\"}' -w \"\\\\nHTTP %{http_code}\\\\n\")"
     ]
   }
 }
