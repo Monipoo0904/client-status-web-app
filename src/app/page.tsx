@@ -1,73 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import MyVillageLogo from "@/components/myvillage-logo";
 import {
   BriefcaseBusiness,
   CheckCircle2,
   FileText,
+  FolderTree,
   Handshake,
   ListTodo,
-  MessagesSquare,
-  Plus,
+  Mail,
+  Slack,
+  Sparkles,
   UsersRound
 } from "lucide-react";
-
-type ProjectStatus = "On Track" | "At Risk" | "Blocked" | "Done";
-type ContractStatus = "Draft" | "Active" | "At Risk" | "Closed";
-type TaskStatus = "Todo" | "In Progress" | "Blocked" | "Done";
-type TaskPriority = "Low" | "Medium" | "High";
-
-type Developer = {
-  id: string;
-  name: string;
-  role: string;
-  focus: string;
-  capacity: number;
-};
-
-type Project = {
-  id: string;
-  name: string;
-  client: string;
-  status: ProjectStatus;
-  ownerDeveloperId: string;
-  summary: string;
-};
-
-type ContractProgressEntry = {
-  id: string;
-  note: string;
-  createdAt: string;
-  author: string;
-};
-
-type Contract = {
-  id: string;
-  projectId: string;
-  name: string;
-  client: string;
-  value: number;
-  status: ContractStatus;
-  ownerDeveloperId: string;
-  startDate: string;
-  renewalDate: string;
-  progress: ContractProgressEntry[];
-};
-
-type Task = {
-  id: string;
-  projectId: string;
-  title: string;
-  summary: string;
-  status: TaskStatus;
-  priority: TaskPriority;
-  dueDate: string;
-  developerId: string;
-  contractId: string;
-};
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import MyVillageLogo from "@/components/myvillage-logo";
+import {
+  seedContracts,
+  seedDevelopers,
+  seedProjects,
+  seedTasks,
+  workflowInbox,
+  type Contract,
+  type ContractStatus,
+  type Developer,
+  type NotificationChannel,
+  type Project,
+  type ProjectStatus,
+  type Task,
+  type TaskPriority,
+  type TaskStatus,
+  type WorkflowSource
+} from "@/lib/demo-data";
 
 type TaskSummary = {
   label: string;
@@ -75,114 +40,58 @@ type TaskSummary = {
   color: string;
 };
 
-const seedDevelopers: Developer[] = [
-  {
-    id: "DEV-001",
-    name: "Ari M.",
-    role: "Project Lead",
-    focus: "Delivery and client sync",
-    capacity: 80
-  },
-  {
-    id: "DEV-002",
-    name: "Nia",
-    role: "Frontend Engineer",
-    focus: "UI and dashboard modules",
-    capacity: 75
-  },
-  {
-    id: "DEV-003",
-    name: "Theo",
-    role: "Backend Engineer",
-    focus: "Data APIs and integration",
-    capacity: 70
-  }
-];
+const DEFAULT_WORKFLOW_TEXT = `Meeting wrap-up from Ms. Valerie\n- finalize dashboard QA pass before next demo\n- draft client release notes and share for review\n- confirm API retry thresholds with backend team`;
 
-const seedProjects: Project[] = [
-  {
-    id: "PRJ-101",
-    name: "Client Portal Refresh",
-    client: "Northwind Labs",
-    status: "On Track",
-    ownerDeveloperId: "DEV-001",
-    summary: "Modernize client portal with task and contract visibility."
-  },
-  {
-    id: "PRJ-108",
-    name: "Field Ops Mobile Sync",
-    client: "Harvest Grid",
-    status: "At Risk",
-    ownerDeveloperId: "DEV-003",
-    summary: "Improve sync reliability and release updated field workflow tooling."
-  }
-];
+function extractActionItems(rawText: string) {
+  return rawText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => /^([-*•]|\d+[.)])\s+/.test(line))
+    .map((line) => line.replace(/^([-*•]|\d+[.)])\s+/, ""));
+}
 
-const seedContracts: Contract[] = [
-  {
-    id: "CTR-001",
-    projectId: "PRJ-101",
-    name: "Northwind Labs Service Agreement",
-    client: "Northwind Labs",
-    value: 120000,
-    status: "Active",
-    ownerDeveloperId: "DEV-001",
-    startDate: "2026-06-15",
-    renewalDate: "2026-12-15",
-    progress: [
-      {
-        id: "p1",
-        note: "Kickoff completed and statement of work approved.",
-        createdAt: "2026-07-10T10:00:00.000Z",
-        author: "Ari M."
-      }
-    ]
-  },
-  {
-    id: "CTR-002",
-    projectId: "PRJ-108",
-    name: "Harvest Grid Extension",
-    client: "Harvest Grid",
-    value: 88000,
-    status: "At Risk",
-    ownerDeveloperId: "DEV-003",
-    startDate: "2026-07-01",
-    renewalDate: "2026-11-10",
-    progress: [
-      {
-        id: "p2",
-        note: "Legal review comments received from client counsel.",
-        createdAt: "2026-07-12T15:30:00.000Z",
-        author: "Theo"
-      }
-    ]
+function inferPriorityFromLine(line: string): TaskPriority {
+  const normalized = line.toLowerCase();
+  if (/(urgent|asap|critical|today|blocker)/.test(normalized)) {
+    return "High";
   }
-];
 
-const seedTasks: Task[] = [
-  {
-    id: "TASK-001",
-    projectId: "PRJ-101",
-    title: "Launch Client Status Dashboard MVP",
-    summary: "Finalize one clear dashboard flow for client demos.",
-    status: "In Progress",
-    priority: "High",
-    dueDate: "2026-07-24",
-    developerId: "DEV-002",
-    contractId: "CTR-001"
-  },
-  {
-    id: "TASK-002",
-    projectId: "PRJ-108",
-    title: "Complete API reliability pass",
-    summary: "Reduce response failures and finalize service monitoring setup.",
-    status: "Todo",
-    priority: "Medium",
-    dueDate: "2026-07-27",
-    developerId: "DEV-003",
-    contractId: "CTR-002"
+  if (/(later|backlog|follow up|eventually)/.test(normalized)) {
+    return "Low";
   }
-];
+
+  return "Medium";
+}
+
+function inferDueDateFromLine(line: string, baseDate: Date) {
+  const normalized = line.toLowerCase();
+  const due = new Date(baseDate);
+
+  if (/(today|asap|urgent)/.test(normalized)) {
+    due.setDate(due.getDate() + 1);
+  } else if (/tomorrow/.test(normalized)) {
+    due.setDate(due.getDate() + 1);
+  } else if (/next week/.test(normalized)) {
+    due.setDate(due.getDate() + 7);
+  } else {
+    due.setDate(due.getDate() + 3);
+  }
+
+  return due.toISOString().slice(0, 10);
+}
+
+function inferContractStatusFromWorkflow(rawText: string, currentStatus: ContractStatus, sourceType: WorkflowSource["sourceType"]): ContractStatus {
+  const normalized = rawText.toLowerCase();
+  if (/(blocked|delay|risk|issue)/.test(normalized)) {
+    return "At Risk";
+  }
+
+  if (sourceType === "Meeting Email" && currentStatus !== "Closed") {
+    return "Active";
+  }
+
+  return currentStatus;
+}
 
 function formatDateTime(value: string) {
   const parsed = new Date(value);
@@ -196,6 +105,19 @@ function formatDateTime(value: string) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit"
+  });
+}
+
+function formatDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
   });
 }
 
@@ -223,13 +145,25 @@ function statusChipClass(status: TaskStatus | ContractStatus | ProjectStatus) {
   return "status-chip status-blocked";
 }
 
+function notificationLabel(channel: NotificationChannel) {
+  if (channel === "Email") {
+    return "Email alert";
+  }
+
+  if (channel === "Slack") {
+    return "Slack alert";
+  }
+
+  return "No alert";
+}
+
 function MetricCard({
   icon,
   label,
   value,
   tone
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
   tone: "sun" | "forest" | "flare" | "earth";
@@ -278,9 +212,20 @@ export default function Home() {
   const [projects, setProjects] = useState<Project[]>(seedProjects);
   const [contracts, setContracts] = useState<Contract[]>(seedContracts);
   const [tasks, setTasks] = useState<Task[]>(seedTasks);
+  const [workflowSources] = useState<WorkflowSource[]>(workflowInbox);
+  const [workflowRuns, setWorkflowRuns] = useState<WorkflowSource[]>([]);
   const [contractDrafts, setContractDrafts] = useState<Record<string, string>>({});
+  const [selectedContractId, setSelectedContractId] = useState(seedContracts[0]?.id ?? "");
+  const [workflowMessage, setWorkflowMessage] = useState("");
+
+  const [workflowForm, setWorkflowForm] = useState({
+    sourceType: "Meeting Email" as WorkflowSource["sourceType"],
+    notificationPreference: "Email" as NotificationChannel,
+    rawText: DEFAULT_WORKFLOW_TEXT
+  });
 
   const [projectForm, setProjectForm] = useState({
+    contractId: seedContracts[0]?.id ?? "",
     name: "",
     client: "",
     status: "On Track" as ProjectStatus,
@@ -289,25 +234,28 @@ export default function Home() {
   });
 
   const [taskForm, setTaskForm] = useState({
+    contractId: seedContracts[0]?.id ?? "",
+    projectId: seedProjects[0]?.id ?? "",
     title: "",
     summary: "",
     status: "Todo" as TaskStatus,
     priority: "Medium" as TaskPriority,
     dueDate: "",
     developerId: "",
-    contractId: "",
-    projectId: ""
+    notificationPreference: "Email" as NotificationChannel
   });
 
   const [contractForm, setContractForm] = useState({
+    organization: "",
     name: "",
     client: "",
     value: 0,
     status: "Draft" as ContractStatus,
     ownerDeveloperId: "",
-    projectId: "",
+    workflowMode: "Email First" as Contract["workflowMode"],
     startDate: "",
-    renewalDate: ""
+    renewalDate: "",
+    workflowNotes: ""
   });
 
   const [developerForm, setDeveloperForm] = useState({
@@ -317,29 +265,72 @@ export default function Home() {
     capacity: 70
   });
 
-  const developerLookup = useMemo(() => new Map(developers.map((d) => [d.id, d])), [developers]);
-  const contractLookup = useMemo(() => new Map(contracts.map((c) => [c.id, c])), [contracts]);
+  const developerLookup = useMemo(() => new Map(developers.map((developer) => [developer.id, developer])), [developers]);
+  const contractLookup = useMemo(() => new Map(contracts.map((contract) => [contract.id, contract])), [contracts]);
+  const projectLookup = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+
+  const contractFolders = useMemo(() => {
+    return contracts.map((contract) => {
+      const linkedProjects = projects.filter((project) => project.contractId === contract.id);
+      const linkedTasks = tasks.filter((task) => task.contractId === contract.id);
+      const linkedDeveloperIds = new Set<string>([
+        contract.ownerDeveloperId,
+        ...linkedProjects.map((project) => project.ownerDeveloperId),
+        ...linkedTasks
+          .map((task) => task.developerId)
+          .filter((developerId): developerId is string => Boolean(developerId))
+      ]);
+
+      return {
+        contract,
+        projects: linkedProjects,
+        tasks: linkedTasks,
+        developers: Array.from(linkedDeveloperIds)
+          .map((developerId) => developerLookup.get(developerId))
+          .filter((developer): developer is Developer => Boolean(developer)),
+        openTasks: linkedTasks.filter((task) => task.status !== "Done").length,
+        unassignedTasks: linkedTasks.filter((task) => !task.developerId).length
+      };
+    });
+  }, [contracts, projects, tasks, developerLookup]);
+
+  const selectedFolder =
+    contractFolders.find((folder) => folder.contract.id === selectedContractId) ?? contractFolders[0] ?? null;
+
+  const selectedWorkflow = useMemo(
+    () => [...workflowRuns, ...workflowSources].filter((item) => item.contractId === selectedFolder?.contract.id),
+    [selectedFolder, workflowSources, workflowRuns]
+  );
+
+  const workflowPreviewItems = useMemo(
+    () => extractActionItems(workflowForm.rawText).slice(0, 5),
+    [workflowForm.rawText]
+  );
+
+  const selectedProjectOptions = useMemo(
+    () => projects.filter((project) => project.contractId === taskForm.contractId),
+    [projects, taskForm.contractId]
+  );
 
   const projectOverview = useMemo(() => {
     return projects.map((project) => {
       const projectTasks = tasks.filter((task) => task.projectId === project.id);
-      const projectContracts = contracts.filter((contract) => contract.projectId === project.id);
       const doneTasks = projectTasks.filter((task) => task.status === "Done").length;
       const progressPct = projectTasks.length ? Math.round((doneTasks / projectTasks.length) * 100) : 0;
 
       return {
         project,
         tasks: projectTasks,
-        contracts: projectContracts,
         progressPct,
+        contract: contractLookup.get(project.contractId),
         openTasks: projectTasks.filter((task) => task.status !== "Done").length
       };
     });
-  }, [projects, tasks, contracts]);
+  }, [projects, tasks, contractLookup]);
 
   const taskDoneCount = tasks.filter((task) => task.status === "Done").length;
   const openTaskCount = tasks.length - taskDoneCount;
-  const activeContracts = contracts.filter((contract) => contract.status === "Active").length;
+  const unassignedTaskCount = tasks.filter((task) => !task.developerId).length;
   const taskStatusSegments: TaskSummary[] = [
     { label: "Todo", count: tasks.filter((task) => task.status === "Todo").length, color: "#b07c00" },
     { label: "In Progress", count: tasks.filter((task) => task.status === "In Progress").length, color: "#4f392a" },
@@ -358,25 +349,45 @@ export default function Home() {
       }))
     );
 
-    return [...contractActivity].sort(
+    const workflowActivity = workflowSources.map((item) => ({
+      id: item.id,
+      type: item.sourceType,
+      title: item.title,
+      details: item.action,
+      createdAt: item.lastProcessedAt
+    }));
+
+    const workflowRunActivity = workflowRuns.map((item) => ({
+      id: item.id,
+      type: `${item.sourceType} Run`,
+      title: item.title,
+      details: item.action,
+      createdAt: item.lastProcessedAt
+    }));
+
+    return [...contractActivity, ...workflowActivity, ...workflowRunActivity].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [contracts]);
+  }, [contracts, workflowSources, workflowRuns]);
 
-  const handleDeveloperAdd = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleDeveloperAdd = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!developerForm.name || !developerForm.role) {
       return;
     }
 
     const nextId = `DEV-${Date.now()}`;
+    const safeName = developerForm.name.toLowerCase().replace(/\s+/g, ".");
+
     setDevelopers((current) => [
       {
         id: nextId,
         name: developerForm.name,
         role: developerForm.role,
         focus: developerForm.focus || "General",
-        capacity: Number(developerForm.capacity)
+        capacity: Number(developerForm.capacity),
+        email: `${safeName}@myvillage.app`,
+        slackHandle: `@${safeName.replace(/\./g, "")}`
       },
       ...current
     ]);
@@ -389,9 +400,9 @@ export default function Home() {
     });
   };
 
-  const handleProjectAdd = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleProjectAdd = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!projectForm.name || !projectForm.client || !projectForm.ownerDeveloperId) {
+    if (!projectForm.name || !projectForm.client || !projectForm.ownerDeveloperId || !projectForm.contractId) {
       return;
     }
 
@@ -399,6 +410,7 @@ export default function Home() {
     setProjects((current) => [
       {
         id: nextId,
+        contractId: projectForm.contractId,
         name: projectForm.name,
         client: projectForm.client,
         status: projectForm.status,
@@ -409,6 +421,7 @@ export default function Home() {
     ]);
 
     setProjectForm({
+      contractId: selectedFolder?.contract.id ?? contracts[0]?.id ?? "",
       name: "",
       client: "",
       status: "On Track",
@@ -417,16 +430,17 @@ export default function Home() {
     });
   };
 
-  const handleContractAdd = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleContractAdd = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!contractForm.name || !contractForm.client || !contractForm.ownerDeveloperId || !contractForm.projectId) {
+    if (!contractForm.name || !contractForm.client || !contractForm.ownerDeveloperId || !contractForm.organization) {
       return;
     }
 
+    const nextId = `CTR-${Date.now()}`;
     setContracts((current) => [
       {
-        id: `CTR-${Date.now()}`,
-        projectId: contractForm.projectId,
+        id: nextId,
+        organization: contractForm.organization,
         name: contractForm.name,
         client: contractForm.client,
         value: Number(contractForm.value),
@@ -434,57 +448,94 @@ export default function Home() {
         ownerDeveloperId: contractForm.ownerDeveloperId,
         startDate: contractForm.startDate || new Date().toISOString().slice(0, 10),
         renewalDate: contractForm.renewalDate || new Date().toISOString().slice(0, 10),
+        workflowMode: contractForm.workflowMode,
+        workflowNotes: contractForm.workflowNotes || "Review email recap before routing assignments.",
         progress: []
       },
       ...current
     ]);
 
+    setSelectedContractId(nextId);
     setContractForm({
+      organization: "",
       name: "",
       client: "",
       value: 0,
       status: "Draft",
       ownerDeveloperId: "",
-      projectId: "",
+      workflowMode: "Email First",
       startDate: "",
-      renewalDate: ""
+      renewalDate: "",
+      workflowNotes: ""
     });
   };
 
-  const handleTaskAdd = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleTaskAdd = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!taskForm.title || !taskForm.projectId || !taskForm.developerId) {
+    if (!taskForm.title || !taskForm.projectId || !taskForm.contractId) {
       return;
     }
 
     setTasks((current) => [
       {
         id: `TASK-${Date.now()}`,
+        contractId: taskForm.contractId,
         projectId: taskForm.projectId,
         title: taskForm.title,
         summary: taskForm.summary || "No summary provided.",
         status: taskForm.status,
         priority: taskForm.priority,
         dueDate: taskForm.dueDate || new Date().toISOString().slice(0, 10),
-        developerId: taskForm.developerId,
-        contractId: taskForm.contractId
+        developerId: taskForm.developerId || null,
+        notificationPreference: taskForm.notificationPreference,
+        source: "Manual",
+        awaitingAssignment: !taskForm.developerId
       },
       ...current
     ]);
 
+    const nextProjectId = projects.find((project) => project.contractId === taskForm.contractId)?.id ?? "";
     setTaskForm({
+      contractId: selectedFolder?.contract.id ?? contracts[0]?.id ?? "",
+      projectId: nextProjectId,
       title: "",
       summary: "",
       status: "Todo",
       priority: "Medium",
       dueDate: "",
       developerId: "",
-      contractId: "",
-      projectId: ""
+      notificationPreference: "Email"
     });
   };
 
-  const handleContractProgressAdd = (event: React.FormEvent<HTMLFormElement>, contractId: string) => {
+  const handleTaskAssignment = (taskId: string, developerId: string) => {
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              developerId: developerId || null,
+              awaitingAssignment: !developerId
+            }
+          : task
+      )
+    );
+  };
+
+  const handleTaskNotification = (taskId: string, notificationPreference: NotificationChannel) => {
+    setTasks((current) =>
+      current.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              notificationPreference
+            }
+          : task
+      )
+    );
+  };
+
+  const handleContractProgressAdd = (event: FormEvent<HTMLFormElement>, contractId: string) => {
     event.preventDefault();
     const draft = (contractDrafts[contractId] ?? "").trim();
     if (!draft) {
@@ -513,6 +564,99 @@ export default function Home() {
     setContractDrafts((current) => ({ ...current, [contractId]: "" }));
   };
 
+  const handleWorkflowRun = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedFolder) {
+      return;
+    }
+
+    const actionItems = extractActionItems(workflowForm.rawText);
+    if (!actionItems.length) {
+      setWorkflowMessage("Add at least one bullet-point action item to run the workflow.");
+      return;
+    }
+
+    const now = new Date();
+    const timestamp = now.toISOString();
+    let projectId = selectedFolder.projects[0]?.id ?? "";
+
+    if (!projectId) {
+      projectId = `PRJ-${Date.now()}`;
+      setProjects((current) => [
+        {
+          id: projectId,
+          contractId: selectedFolder.contract.id,
+          name: `${selectedFolder.contract.organization} Delivery Queue`,
+          client: selectedFolder.contract.client,
+          status: "On Track",
+          ownerDeveloperId: selectedFolder.contract.ownerDeveloperId,
+          summary: "Auto-generated project for workflow-created tasks."
+        },
+        ...current
+      ]);
+    }
+
+    const generatedTasks: Task[] = actionItems.map((item, index) => ({
+      id: `TASK-${Date.now()}-${index}`,
+      contractId: selectedFolder.contract.id,
+      projectId,
+      title: item.slice(0, 72),
+      summary: `Created from ${workflowForm.sourceType.toLowerCase()} workflow intake.`,
+      status: "Todo",
+      priority: inferPriorityFromLine(item),
+      dueDate: inferDueDateFromLine(item, now),
+      developerId: null,
+      notificationPreference: workflowForm.notificationPreference,
+      source: workflowForm.sourceType,
+      awaitingAssignment: true
+    }));
+
+    setTasks((current) => [...generatedTasks, ...current]);
+
+    setContracts((current) =>
+      current.map((contract) =>
+        contract.id === selectedFolder.contract.id
+          ? {
+              ...contract,
+              status: inferContractStatusFromWorkflow(workflowForm.rawText, contract.status, workflowForm.sourceType),
+              progress: [
+                {
+                  id: `p-${Date.now()}`,
+                  note: `Workflow processed ${actionItems.length} new action item${actionItems.length === 1 ? "" : "s"} from ${workflowForm.sourceType}.`,
+                  createdAt: timestamp,
+                  author: "Workflow Bot"
+                },
+                ...contract.progress
+              ]
+            }
+          : contract
+      )
+    );
+
+    setWorkflowRuns((current) => [
+      {
+        id: `WF-RUN-${Date.now()}`,
+        contractId: selectedFolder.contract.id,
+        sourceType: workflowForm.sourceType,
+        title: `${workflowForm.sourceType} import`,
+        summary: `Created ${actionItems.length} draft task${actionItems.length === 1 ? "" : "s"} for assignment.`,
+        reliability: workflowForm.sourceType === "Meeting Email" ? "Primary" : "Fallback",
+        lastProcessedAt: timestamp,
+        action: `Generated ${actionItems.length} unassigned tasks with ${workflowForm.notificationPreference.toLowerCase()} notifications.`
+      },
+      ...current
+    ]);
+
+    setWorkflowMessage(
+      `Workflow complete: ${actionItems.length} task${actionItems.length === 1 ? "" : "s"} created in ${selectedFolder.contract.organization}.`
+    );
+
+    setWorkflowForm((current) => ({
+      ...current,
+      rawText: ""
+    }));
+  };
+
   return (
     <main className="dashboard-shell">
       <section className="hero-panel">
@@ -527,53 +671,65 @@ export default function Home() {
             </div>
             <div>
               <p className="eyebrow">MyVillage Project</p>
-              <h1>Project Portfolio Overview</h1>
+              <h1>Contract Workspace</h1>
             </div>
           </div>
           <p className="hero-copy">
-            Unified overview of projects, tasks, contracts, and developer assignments with expandable project breakdowns.
+            Contracts are the top-level folder. Each workspace rolls up projects, tasks, developers, and an email-first automation path for post-meeting follow-through.
           </p>
         </motion.div>
       </section>
 
       <section className="metrics-grid metrics-grid-four motion-section delay-1">
-        <MetricCard icon={<FileText size={20} />} label="Projects" value={String(projects.length)} tone="sun" />
+        <MetricCard icon={<Handshake size={20} />} label="Contracts" value={String(contracts.length)} tone="sun" />
+        <MetricCard icon={<BriefcaseBusiness size={20} />} label="Projects" value={String(projects.length)} tone="flare" />
         <MetricCard icon={<ListTodo size={20} />} label="Open Tasks" value={String(openTaskCount)} tone="forest" />
-        <MetricCard icon={<Handshake size={20} />} label="Active Contracts" value={String(activeContracts)} tone="flare" />
-        <MetricCard icon={<UsersRound size={20} />} label="Developers" value={String(developers.length)} tone="earth" />
+        <MetricCard icon={<UsersRound size={20} />} label="Unassigned Tasks" value={String(unassignedTaskCount)} tone="earth" />
       </section>
 
       <section className="workspace-layout motion-section delay-2">
         <aside className="panel project-sidebar">
           <header className="panel-header">
-            <h3>Projects</h3>
-            <BriefcaseBusiness size={18} />
+            <h3>Contract Folders</h3>
+            <FolderTree size={18} />
           </header>
 
           <div className="sidebar-project-list">
-            {projectOverview.map(({ project, tasks: pTasks, contracts: pContracts, openTasks }) => (
-              <article key={project.id} className="sidebar-project-item">
-                <Link className="sidebar-project-toggle" href={`/projects/${project.id}`}>
+            {contractFolders.map((folder) => (
+              <article key={folder.contract.id} className="sidebar-project-item">
+                <button
+                  type="button"
+                  className={`sidebar-project-toggle${selectedFolder?.contract.id === folder.contract.id ? " is-active" : ""}`}
+                  onClick={() => {
+                    setSelectedContractId(folder.contract.id);
+                    setProjectForm((current) => ({ ...current, contractId: folder.contract.id }));
+                    setTaskForm((current) => ({
+                      ...current,
+                      contractId: folder.contract.id,
+                      projectId: projects.find((project) => project.contractId === folder.contract.id)?.id ?? ""
+                    }));
+                  }}
+                >
                   <div>
-                    <p className="project-id">{project.id}</p>
-                    <h4>{project.name}</h4>
-                    <p className="project-meta">{project.client}</p>
+                    <p className="project-id">{folder.contract.id}</p>
+                    <h4>{folder.contract.organization}</h4>
+                    <p className="project-meta">{folder.contract.name}</p>
                   </div>
-                  <span className={statusChipClass(project.status)}>{project.status}</span>
-                </Link>
+                  <span className={statusChipClass(folder.contract.status)}>{folder.contract.status}</span>
+                </button>
                 <div className="sidebar-project-details">
                   <p>
-                    <strong>Owner:</strong> {developerLookup.get(project.ownerDeveloperId)?.name ?? "Unknown"}
+                    <strong>Owner:</strong> {developerLookup.get(folder.contract.ownerDeveloperId)?.name ?? "Unknown"}
                   </p>
                   <p>
-                    <strong>Tasks:</strong> {pTasks.length} ({openTasks} open)
+                    <strong>Projects:</strong> {folder.projects.length}
                   </p>
                   <p>
-                    <strong>Contracts:</strong> {pContracts.length}
+                    <strong>Tasks:</strong> {folder.tasks.length} ({folder.unassignedTasks} unassigned)
                   </p>
                   <ul>
-                    {pTasks.slice(0, 3).map((task) => (
-                      <li key={task.id}>{task.title}</li>
+                    {folder.projects.slice(0, 3).map((project) => (
+                      <li key={project.id}>{project.name}</li>
                     ))}
                   </ul>
                 </div>
@@ -583,6 +739,27 @@ export default function Home() {
         </aside>
 
         <div className="workspace-main">
+          {selectedFolder ? (
+            <article className="panel folder-panel">
+              <header className="panel-header">
+                <div>
+                  <h3>{selectedFolder.contract.organization}</h3>
+                  <p className="panel-subtitle">{selectedFolder.contract.name}</p>
+                </div>
+                <span className={statusChipClass(selectedFolder.contract.status)}>{selectedFolder.contract.status}</span>
+              </header>
+              <div className="task-meta-grid folder-meta-grid">
+                <span>Client: {selectedFolder.contract.client}</span>
+                <span>Value: {formatCurrency(selectedFolder.contract.value)}</span>
+                <span>Owner: {developerLookup.get(selectedFolder.contract.ownerDeveloperId)?.name ?? "Unknown"}</span>
+                <span>Renewal: {formatDate(selectedFolder.contract.renewalDate)}</span>
+                <span>Workflow: {selectedFolder.contract.workflowMode}</span>
+                <span>Developers in folder: {selectedFolder.developers.length}</span>
+              </div>
+              <p className="automation-note">{selectedFolder.contract.workflowNotes}</p>
+            </article>
+          ) : null}
+
           <article className="panel analytics-panel">
             <header className="panel-header">
               <h3>Task Analytics</h3>
@@ -604,62 +781,90 @@ export default function Home() {
             </div>
           </article>
 
-          <article className="panel">
-            <header className="panel-header">
-              <h3>Project Task Completion</h3>
-              <CheckCircle2 size={18} />
-            </header>
-            <div className="project-overview-grid" role="list">
-              {projectOverview.map(({ project, tasks: pTasks, progressPct }) => (
-                <article key={project.id} className="project-overview-card" role="listitem">
-                  <div className="contract-top">
-                    <div>
-                      <p className="project-id">{project.id}</p>
-                      <h3>
-                        <Link href={`/projects/${project.id}`}>{project.name}</Link>
-                      </h3>
-                      <p className="project-meta">{project.summary}</p>
-                    </div>
-                    <span className={statusChipClass(project.status)}>{project.status}</span>
-                  </div>
-                  <div className="progress-row">
-                    <span>Task completion</span>
-                    <strong>{progressPct}%</strong>
-                  </div>
-                  <ProgressBar value={progressPct} />
-                  <div className="task-meta-grid">
-                    <span>Total tasks: {pTasks.length}</span>
-                    <span>Done: {pTasks.filter((task) => task.status === "Done").length}</span>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </article>
-
           <div className="uniform-two-col">
             <article className="panel">
               <header className="panel-header">
-                <h3>All Tasks</h3>
-                <ListTodo size={18} />
+                <h3>Automation Intake</h3>
+                <Sparkles size={18} />
               </header>
-              <div className="task-list" role="list">
-                {tasks.map((task) => (
-                  <article key={task.id} className="task-item" role="listitem">
-                    <div className="contract-top">
+              <p className="helper-copy">
+                Use the meeting email as the primary source of truth. Let transcripts enrich the task description only when they include the full close-out.
+              </p>
+              <form className="entry-form workflow-form" onSubmit={handleWorkflowRun}>
+                <div className="field-row two-col">
+                  <label>
+                    Source
+                    <select
+                      value={workflowForm.sourceType}
+                      onChange={(event) =>
+                        setWorkflowForm((current) => ({
+                          ...current,
+                          sourceType: event.target.value as WorkflowSource["sourceType"]
+                        }))
+                      }
+                    >
+                      <option value="Meeting Email">Meeting Email</option>
+                      <option value="Otter Transcript">Otter Transcript</option>
+                    </select>
+                  </label>
+                  <label>
+                    Notify New Assignees Via
+                    <select
+                      value={workflowForm.notificationPreference}
+                      onChange={(event) =>
+                        setWorkflowForm((current) => ({
+                          ...current,
+                          notificationPreference: event.target.value as NotificationChannel
+                        }))
+                      }
+                    >
+                      <option value="None">No alert</option>
+                      <option value="Email">Email</option>
+                      <option value="Slack">Slack</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="field-row">
+                  <label>
+                    Meeting Notes / Email Body
+                    <textarea
+                      rows={6}
+                      value={workflowForm.rawText}
+                      onChange={(event) =>
+                        setWorkflowForm((current) => ({
+                          ...current,
+                          rawText: event.target.value
+                        }))
+                      }
+                      placeholder="Paste email or transcript with bullet-point action items"
+                    />
+                  </label>
+                </div>
+                <button type="submit">Run Workflow</button>
+              </form>
+              {workflowMessage ? <p className="workflow-message">{workflowMessage}</p> : null}
+              <div className="workflow-preview">
+                <p className="project-id">Detected Action Items ({workflowPreviewItems.length})</p>
+                <ul>
+                  {workflowPreviewItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="activity-feed" role="list">
+                {selectedWorkflow.map((item) => (
+                  <article key={item.id} className="activity-item" role="listitem">
+                    <div className="activity-top">
                       <div>
-                        <p className="project-id">{task.id}</p>
-                        <h3>{task.title}</h3>
-                        <p className="project-meta">{task.summary}</p>
+                        <p className="project-id">{item.sourceType}</p>
+                        <h3>{item.title}</h3>
                       </div>
-                      <span className={statusChipClass(task.status)}>{task.status}</span>
+                      <span className={item.reliability === "Primary" ? "status-chip status-on-track" : "status-chip status-at-risk"}>
+                        {item.reliability}
+                      </span>
                     </div>
-                    <div className="task-meta-grid">
-                      <span>Priority: {task.priority}</span>
-                      <span>Due: {task.dueDate}</span>
-                      <span>Project: {projects.find((project) => project.id === task.projectId)?.name ?? "Unknown"}</span>
-                      <span>Developer: {developerLookup.get(task.developerId)?.name ?? "Unassigned"}</span>
-                      <span>Contract: {contractLookup.get(task.contractId)?.name ?? "Not linked"}</span>
-                    </div>
+                    <p className="activity-details">{item.summary}</p>
+                    <p className="helper-copy">{item.action}</p>
                   </article>
                 ))}
               </div>
@@ -667,51 +872,177 @@ export default function Home() {
 
             <article className="panel">
               <header className="panel-header">
-                <h3>All Contracts</h3>
-                <Handshake size={18} />
+                <h3>Folder Team</h3>
+                <UsersRound size={18} />
               </header>
-              <div className="contract-stack" role="list">
-                {contracts.map((contract) => (
-                  <article key={contract.id} className="contract-item" role="listitem">
+              <div className="developer-grid" role="list">
+                {selectedFolder?.developers.map((developer) => (
+                  <article key={developer.id} className="task-item" role="listitem">
                     <div className="contract-top">
                       <div>
-                        <p className="project-id">{contract.id}</p>
-                        <h3>{contract.name}</h3>
-                        <p className="project-meta">{contract.client}</p>
+                        <p className="project-id">{developer.id}</p>
+                        <h3>{developer.name}</h3>
+                        <p className="project-meta">{developer.role}</p>
                       </div>
-                      <span className={statusChipClass(contract.status)}>{contract.status}</span>
+                      <span className="status-chip status-on-track">{developer.capacity}% capacity</span>
                     </div>
                     <div className="task-meta-grid">
-                      <span>Project: {projects.find((project) => project.id === contract.projectId)?.name ?? "Unknown"}</span>
-                      <span>Value: {formatCurrency(contract.value)}</span>
-                      <span>Owner: {developerLookup.get(contract.ownerDeveloperId)?.name ?? "Unknown"}</span>
-                      <span>Renewal: {contract.renewalDate}</span>
+                      <span>Focus: {developer.focus}</span>
+                      <span>Email: {developer.email}</span>
+                      <span>Slack: {developer.slackHandle}</span>
                     </div>
-                    <form className="inline-form" onSubmit={(event) => handleContractProgressAdd(event, contract.id)}>
-                      <input
-                        value={contractDrafts[contract.id] ?? ""}
-                        onChange={(event) =>
-                          setContractDrafts((current) => ({ ...current, [contract.id]: event.target.value }))
-                        }
-                        placeholder="Add timestamped progress update"
-                      />
-                      <button type="submit">
-                        <Plus size={14} />
-                        Log
-                      </button>
-                    </form>
-                    <ul className="contract-log-list">
-                      {contract.progress.map((entry) => (
-                        <li key={entry.id}>
-                          <span>{entry.note}</span>
-                          <span>
-                            {entry.author} · {formatDateTime(entry.createdAt)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
                   </article>
                 ))}
+              </div>
+            </article>
+          </div>
+
+          <article className="panel">
+            <header className="panel-header">
+              <h3>Projects In This Workspace</h3>
+              <CheckCircle2 size={18} />
+            </header>
+            <div className="project-overview-grid" role="list">
+              {projectOverview
+                .filter(({ project }) => project.contractId === selectedFolder?.contract.id)
+                .map(({ project, tasks: projectTasks, progressPct, contract, openTasks }) => (
+                  <article key={project.id} className="project-overview-card" role="listitem">
+                    <div className="contract-top">
+                      <div>
+                        <p className="project-id">{project.id}</p>
+                        <h3>
+                          <Link href={`/projects/${project.id}`}>{project.name}</Link>
+                        </h3>
+                        <p className="project-meta">{project.summary}</p>
+                      </div>
+                      <span className={statusChipClass(project.status)}>{project.status}</span>
+                    </div>
+                    <div className="progress-row">
+                      <span>{contract?.organization ?? "Contract"}</span>
+                      <strong>{progressPct}%</strong>
+                    </div>
+                    <ProgressBar value={progressPct} />
+                    <div className="task-meta-grid">
+                      <span>Total tasks: {projectTasks.length}</span>
+                      <span>Open tasks: {openTasks}</span>
+                    </div>
+                  </article>
+                ))}
+            </div>
+          </article>
+
+          <div className="uniform-two-col">
+            <article className="panel">
+              <header className="panel-header">
+                <h3>Contract Tasks</h3>
+                <ListTodo size={18} />
+              </header>
+              <div className="task-list" role="list">
+                {tasks
+                  .filter((task) => task.contractId === selectedFolder?.contract.id)
+                  .map((task) => (
+                    <article key={task.id} className="task-item" role="listitem">
+                      <div className="contract-top">
+                        <div>
+                          <p className="project-id">{task.id}</p>
+                          <h3>{task.title}</h3>
+                          <p className="project-meta">{task.summary}</p>
+                        </div>
+                        <span className={statusChipClass(task.status)}>{task.status}</span>
+                      </div>
+                      <div className="task-meta-grid">
+                        <span>Priority: {task.priority}</span>
+                        <span>Due: {formatDate(task.dueDate)}</span>
+                        <span>Project: {projectLookup.get(task.projectId)?.name ?? "Unknown"}</span>
+                        <span>Source: {task.source}</span>
+                        <span>Assignee: {developerLookup.get(task.developerId ?? "")?.name ?? "Assign later"}</span>
+                      </div>
+                      <div className="task-controls">
+                        <label>
+                          Developer
+                          <select
+                            value={task.developerId ?? ""}
+                            onChange={(event) => handleTaskAssignment(task.id, event.target.value)}
+                          >
+                            <option value="">Assign later</option>
+                            {selectedFolder?.developers.map((developer) => (
+                              <option key={developer.id} value={developer.id}>
+                                {developer.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Notify via
+                          <select
+                            value={task.notificationPreference}
+                            onChange={(event) =>
+                              handleTaskNotification(task.id, event.target.value as NotificationChannel)
+                            }
+                          >
+                            <option value="None">No alert</option>
+                            <option value="Email">Email</option>
+                            <option value="Slack">Slack</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="tag-row">
+                        <span className={`status-chip ${task.awaitingAssignment ? "status-at-risk" : "status-on-track"}`}>
+                          {task.awaitingAssignment ? "Awaiting assignment" : "Assigned"}
+                        </span>
+                        <span className="status-chip contract-pending">{notificationLabel(task.notificationPreference)}</span>
+                      </div>
+                    </article>
+                  ))}
+              </div>
+            </article>
+
+            <article className="panel">
+              <header className="panel-header">
+                <h3>Contract Activity</h3>
+                <FileText size={18} />
+              </header>
+              <div className="contract-stack" role="list">
+                {contracts
+                  .filter((contract) => contract.id === selectedFolder?.contract.id)
+                  .map((contract) => (
+                    <article key={contract.id} className="contract-item" role="listitem">
+                      <div className="contract-top">
+                        <div>
+                          <p className="project-id">{contract.id}</p>
+                          <h3>{contract.name}</h3>
+                          <p className="project-meta">{contract.organization}</p>
+                        </div>
+                        <span className={statusChipClass(contract.status)}>{contract.status}</span>
+                      </div>
+                      <div className="task-meta-grid">
+                        <span>Value: {formatCurrency(contract.value)}</span>
+                        <span>Owner: {developerLookup.get(contract.ownerDeveloperId)?.name ?? "Unknown"}</span>
+                        <span>Start: {formatDate(contract.startDate)}</span>
+                        <span>Renewal: {formatDate(contract.renewalDate)}</span>
+                      </div>
+                      <form className="inline-form" onSubmit={(event) => handleContractProgressAdd(event, contract.id)}>
+                        <input
+                          value={contractDrafts[contract.id] ?? ""}
+                          onChange={(event) =>
+                            setContractDrafts((current) => ({ ...current, [contract.id]: event.target.value }))
+                          }
+                          placeholder="Add timestamped progress update"
+                        />
+                        <button type="submit">Log</button>
+                      </form>
+                      <ul className="contract-log-list">
+                        {contract.progress.map((entry) => (
+                          <li key={entry.id}>
+                            <span>{entry.note}</span>
+                            <span>
+                              {entry.author} · {formatDateTime(entry.createdAt)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))}
               </div>
             </article>
           </div>
@@ -780,12 +1111,30 @@ export default function Home() {
           <form className="entry-form" onSubmit={handleProjectAdd}>
             <div className="field-row two-col">
               <label>
+                Contract Folder
+                <select
+                  value={projectForm.contractId}
+                  onChange={(event) =>
+                    setProjectForm((current) => ({ ...current, contractId: event.target.value }))
+                  }
+                >
+                  <option value="">Select contract</option>
+                  {contracts.map((contract) => (
+                    <option key={contract.id} value={contract.id}>
+                      {contract.organization}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
                 Project Name
                 <input
                   value={projectForm.name}
                   onChange={(event) => setProjectForm((current) => ({ ...current, name: event.target.value }))}
                 />
               </label>
+            </div>
+            <div className="field-row two-col">
               <label>
                 Client
                 <input
@@ -793,8 +1142,6 @@ export default function Home() {
                   onChange={(event) => setProjectForm((current) => ({ ...current, client: event.target.value }))}
                 />
               </label>
-            </div>
-            <div className="field-row two-col">
               <label>
                 Status
                 <select
@@ -809,6 +1156,8 @@ export default function Home() {
                   <option value="Done">Done</option>
                 </select>
               </label>
+            </div>
+            <div className="field-row two-col">
               <label>
                 Project Owner
                 <select
@@ -825,8 +1174,6 @@ export default function Home() {
                   ))}
                 </select>
               </label>
-            </div>
-            <div className="field-row">
               <label>
                 Project Summary
                 <textarea
@@ -852,12 +1199,23 @@ export default function Home() {
           <form className="entry-form" onSubmit={handleContractAdd}>
             <div className="field-row two-col">
               <label>
+                Organization
+                <input
+                  value={contractForm.organization}
+                  onChange={(event) =>
+                    setContractForm((current) => ({ ...current, organization: event.target.value }))
+                  }
+                />
+              </label>
+              <label>
                 Contract Name
                 <input
                   value={contractForm.name}
                   onChange={(event) => setContractForm((current) => ({ ...current, name: event.target.value }))}
                 />
               </label>
+            </div>
+            <div className="field-row two-col">
               <label>
                 Client
                 <input
@@ -865,22 +1223,24 @@ export default function Home() {
                   onChange={(event) => setContractForm((current) => ({ ...current, client: event.target.value }))}
                 />
               </label>
-            </div>
-            <div className="field-row three-col">
               <label>
-                Project
+                Owner
                 <select
-                  value={contractForm.projectId}
-                  onChange={(event) => setContractForm((current) => ({ ...current, projectId: event.target.value }))}
+                  value={contractForm.ownerDeveloperId}
+                  onChange={(event) =>
+                    setContractForm((current) => ({ ...current, ownerDeveloperId: event.target.value }))
+                  }
                 >
-                  <option value="">Select project</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
+                  <option value="">Select developer</option>
+                  {developers.map((developer) => (
+                    <option key={developer.id} value={developer.id}>
+                      {developer.name}
                     </option>
                   ))}
                 </select>
               </label>
+            </div>
+            <div className="field-row three-col">
               <label>
                 Value
                 <input
@@ -906,30 +1266,43 @@ export default function Home() {
                   <option value="Closed">Closed</option>
                 </select>
               </label>
-            </div>
-            <div className="field-row three-col">
               <label>
-                Contract Owner
+                Workflow
                 <select
-                  value={contractForm.ownerDeveloperId}
+                  value={contractForm.workflowMode}
                   onChange={(event) =>
-                    setContractForm((current) => ({ ...current, ownerDeveloperId: event.target.value }))
+                    setContractForm((current) => ({
+                      ...current,
+                      workflowMode: event.target.value as Contract["workflowMode"]
+                    }))
                   }
                 >
-                  <option value="">Select developer</option>
-                  {developers.map((developer) => (
-                    <option key={developer.id} value={developer.id}>
-                      {developer.name}
-                    </option>
-                  ))}
+                  <option value="Email First">Email First</option>
+                  <option value="Transcript Assisted">Transcript Assisted</option>
                 </select>
               </label>
+            </div>
+            <div className="field-row">
+              <label>
+                Workflow Notes
+                <textarea
+                  rows={3}
+                  value={contractForm.workflowNotes}
+                  onChange={(event) =>
+                    setContractForm((current) => ({ ...current, workflowNotes: event.target.value }))
+                  }
+                />
+              </label>
+            </div>
+            <div className="field-row two-col">
               <label>
                 Start Date
                 <input
                   type="date"
                   value={contractForm.startDate}
-                  onChange={(event) => setContractForm((current) => ({ ...current, startDate: event.target.value }))}
+                  onChange={(event) =>
+                    setContractForm((current) => ({ ...current, startDate: event.target.value }))
+                  }
                 />
               </label>
               <label>
@@ -949,10 +1322,48 @@ export default function Home() {
 
         <article className="panel">
           <header className="panel-header">
-            <h3>Add Task to Any Project</h3>
+            <h3>Add Task</h3>
             <ListTodo size={18} />
           </header>
           <form className="entry-form" onSubmit={handleTaskAdd}>
+            <div className="field-row two-col">
+              <label>
+                Contract Folder
+                <select
+                  value={taskForm.contractId}
+                  onChange={(event) => {
+                    const nextContractId = event.target.value;
+                    const nextProjectId = projects.find((project) => project.contractId === nextContractId)?.id ?? "";
+                    setTaskForm((current) => ({
+                      ...current,
+                      contractId: nextContractId,
+                      projectId: nextProjectId
+                    }));
+                  }}
+                >
+                  <option value="">Select contract</option>
+                  {contracts.map((contract) => (
+                    <option key={contract.id} value={contract.id}>
+                      {contract.organization}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Project
+                <select
+                  value={taskForm.projectId}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, projectId: event.target.value }))}
+                >
+                  <option value="">Select project</option>
+                  {selectedProjectOptions.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div className="field-row two-col">
               <label>
                 Task Title
@@ -968,36 +1379,6 @@ export default function Home() {
                   value={taskForm.dueDate}
                   onChange={(event) => setTaskForm((current) => ({ ...current, dueDate: event.target.value }))}
                 />
-              </label>
-            </div>
-            <div className="field-row two-col">
-              <label>
-                Project
-                <select
-                  value={taskForm.projectId}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, projectId: event.target.value }))}
-                >
-                  <option value="">Select project</option>
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Developer
-                <select
-                  value={taskForm.developerId}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, developerId: event.target.value }))}
-                >
-                  <option value="">Select developer</option>
-                  {developers.map((developer) => (
-                    <option key={developer.id} value={developer.id}>
-                      {developer.name} · {developer.role}
-                    </option>
-                  ))}
-                </select>
               </label>
             </div>
             <div className="field-row three-col">
@@ -1029,23 +1410,39 @@ export default function Home() {
                 </select>
               </label>
               <label>
-                Linked Contract
+                Developer
                 <select
-                  value={taskForm.contractId}
+                  value={taskForm.developerId}
                   onChange={(event) =>
-                    setTaskForm((current) => ({ ...current, contractId: event.target.value }))
+                    setTaskForm((current) => ({ ...current, developerId: event.target.value }))
                   }
                 >
-                  <option value="">Optional</option>
-                  {contracts.map((contract) => (
-                    <option key={contract.id} value={contract.id}>
-                      {contract.name}
+                  <option value="">Assign later</option>
+                  {developers.map((developer) => (
+                    <option key={developer.id} value={developer.id}>
+                      {developer.name}
                     </option>
                   ))}
                 </select>
               </label>
             </div>
-            <div className="field-row">
+            <div className="field-row two-col">
+              <label>
+                Notify via
+                <select
+                  value={taskForm.notificationPreference}
+                  onChange={(event) =>
+                    setTaskForm((current) => ({
+                      ...current,
+                      notificationPreference: event.target.value as NotificationChannel
+                    }))
+                  }
+                >
+                  <option value="None">No alert</option>
+                  <option value="Email">Email</option>
+                  <option value="Slack">Slack</option>
+                </select>
+              </label>
               <label>
                 Task Summary
                 <textarea
@@ -1060,21 +1457,35 @@ export default function Home() {
         </article>
       </section>
 
-      <section className="motion-section delay-5">
+      <section className="uniform-two-col motion-section delay-5">
         <article className="panel">
           <header className="panel-header">
-            <h3>Centralized Activity Feed</h3>
-            <MessagesSquare size={18} />
+            <h3>Notification Rules</h3>
+            <Mail size={18} />
+          </header>
+          <p className="helper-copy">
+            Leave new tasks unassigned when needed. Once a developer is selected, the preferred channel can be email or Slack.
+          </p>
+          <div className="tag-row">
+            <span className="status-chip contract-pending">Email for formal handoff</span>
+            <span className="status-chip status-on-track">Slack for immediate routing</span>
+          </div>
+        </article>
+
+        <article className="panel">
+          <header className="panel-header">
+            <h3>Recent Activity</h3>
+            <Slack size={18} />
           </header>
           <div className="activity-feed" role="list">
-            {activityFeed.map((entry) => (
-              <article key={entry.id} className="activity-item" role="listitem">
+            {activityFeed.slice(0, 4).map((item) => (
+              <article key={item.id} className="activity-item" role="listitem">
                 <div className="activity-top">
-                  <strong>{entry.type}</strong>
-                  <span>{formatDateTime(entry.createdAt)}</span>
+                  <p className="project-id">{item.type}</p>
+                  <span>{formatDateTime(item.createdAt)}</span>
                 </div>
-                <p className="activity-title">{entry.title}</p>
-                <p className="activity-details">{entry.details}</p>
+                <p className="activity-title">{item.title}</p>
+                <p className="activity-details">{item.details}</p>
               </article>
             ))}
           </div>

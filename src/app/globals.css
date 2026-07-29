@@ -222,6 +222,10 @@ p {
   cursor: pointer;
 }
 
+.sidebar-project-toggle.is-active {
+  background: rgba(90, 63, 47, 0.08);
+}
+
 .sidebar-project-toggle:hover {
   background: rgba(90, 63, 47, 0.08);
 }
@@ -265,6 +269,12 @@ p {
 
 .project-page-shell {
   margin-top: 1.2rem;
+}
+
+.panel-subtitle {
+  margin-top: 0.2rem;
+  font-size: 0.86rem;
+  color: rgba(47, 32, 23, 0.78);
 }
 
 .project-page-back-row {
@@ -324,6 +334,54 @@ p {
 .developer-grid {
   display: grid;
   gap: 0.62rem;
+}
+
+.folder-panel {
+  background:
+    linear-gradient(180deg, rgba(176, 124, 0, 0.08), transparent 55%),
+    var(--panel);
+}
+
+.folder-meta-grid {
+  margin-top: 0;
+}
+
+.helper-copy,
+.automation-note {
+  margin-top: 0.55rem;
+  color: rgba(47, 32, 23, 0.78);
+  font-size: 0.86rem;
+}
+
+.workflow-form {
+  margin-top: 0.8rem;
+}
+
+.workflow-message {
+  margin-top: 0.6rem;
+  padding: 0.58rem 0.65rem;
+  border-radius: 0.62rem;
+  border: 1px solid rgba(4, 57, 34, 0.2);
+  background: rgba(4, 57, 34, 0.06);
+  color: #032b1a;
+  font-size: 0.84rem;
+}
+
+.workflow-preview {
+  margin-top: 0.65rem;
+  border: 1px solid rgba(90, 63, 47, 0.2);
+  border-radius: 0.68rem;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 0.6rem 0.72rem;
+}
+
+.workflow-preview ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.24rem;
+  color: rgba(48, 32, 23, 0.86);
+  font-size: 0.84rem;
 }
 
 .project-overview-card,
@@ -496,6 +554,27 @@ p {
   display: flex;
   gap: 0.45rem;
   margin-top: 0.62rem;
+}
+
+.task-controls {
+  margin-top: 0.65rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.62rem;
+}
+
+.task-controls label {
+  display: grid;
+  gap: 0.32rem;
+  font-size: 0.78rem;
+  color: rgba(48, 32, 23, 0.78);
+}
+
+.tag-row {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .inline-form input,
@@ -683,7 +762,8 @@ p {
   .two-col,
   .three-col,
   .task-meta-grid,
-  .developer-meta {
+  .developer-meta,
+  .task-controls {
     grid-template-columns: 1fr;
   }
 

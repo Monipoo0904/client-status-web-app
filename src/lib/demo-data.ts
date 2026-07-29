@@ -1,153 +1,383 @@
-export type ProjectStatus = "On Track" | "At Risk" | "Blocked";
-export type ContractStatus = "Active" | "Pending Signature" | "Renewal Due";
+export type ProjectStatus = "On Track" | "At Risk" | "Blocked" | "Done";
+export type ContractStatus = "Draft" | "Active" | "At Risk" | "Closed";
+export type TaskStatus = "Todo" | "In Progress" | "Blocked" | "Done";
+export type TaskPriority = "Low" | "Medium" | "High";
+export type NotificationChannel = "None" | "Email" | "Slack";
+export type WorkflowSourceType = "Meeting Email" | "Otter Transcript" | "Manual";
+export type WorkflowReliability = "Primary" | "Fallback";
 
-export type Priority = "High" | "Medium" | "Low";
-
-export type Villager = {
+export type Developer = {
+  id: string;
   name: string;
   role: string;
+  focus: string;
   capacity: number;
+  email: string;
+  slackHandle: string;
 };
 
 export type Project = {
   id: string;
+  contractId: string;
   name: string;
   client: string;
-  owner: string;
   status: ProjectStatus;
-  progress: number;
-  sprintGoal: string;
-  villagers: Villager[];
-  nextSteps: { task: string; due: string; priority: Priority }[];
+  ownerDeveloperId: string;
+  summary: string;
+};
+
+export type ContractProgressEntry = {
+  id: string;
+  note: string;
+  createdAt: string;
+  author: string;
 };
 
 export type Contract = {
   id: string;
-  projectId: string;
+  organization: string;
+  name: string;
   client: string;
-  owner: string;
   value: number;
-  renewalDate: string;
   status: ContractStatus;
+  ownerDeveloperId: string;
+  startDate: string;
+  renewalDate: string;
+  workflowMode: "Email First" | "Transcript Assisted";
+  workflowNotes: string;
+  progress: ContractProgressEntry[];
 };
 
-export const projects: Project[] = [
+export type Task = {
+  id: string;
+  contractId: string;
+  projectId: string;
+  title: string;
+  summary: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueDate: string;
+  developerId: string | null;
+  notificationPreference: NotificationChannel;
+  source: WorkflowSourceType;
+  awaitingAssignment: boolean;
+};
+
+export type WorkflowSource = {
+  id: string;
+  contractId: string;
+  sourceType: Exclude<WorkflowSourceType, "Manual">;
+  title: string;
+  summary: string;
+  reliability: WorkflowReliability;
+  lastProcessedAt: string;
+  action: string;
+};
+
+export type ProjectDetail = {
+  phase: string;
+  kickoffDate: string;
+  targetLaunchDate: string;
+  deliveryConfidence: "High" | "Medium" | "Low";
+  focusAreas: string[];
+  risks: string[];
+  decisions: string[];
+  notes: { id: string; title: string; body: string; updatedAt: string }[];
+};
+
+export const seedDevelopers: Developer[] = [
+  {
+    id: "DEV-001",
+    name: "Ari M.",
+    role: "Project Lead",
+    focus: "Delivery and client sync",
+    capacity: 80,
+    email: "ari@myvillage.app",
+    slackHandle: "@ari"
+  },
+  {
+    id: "DEV-002",
+    name: "Nia",
+    role: "Frontend Engineer",
+    focus: "UI and dashboard modules",
+    capacity: 75,
+    email: "nia@myvillage.app",
+    slackHandle: "@nia"
+  },
+  {
+    id: "DEV-003",
+    name: "Theo",
+    role: "Backend Engineer",
+    focus: "Data APIs and automation",
+    capacity: 70,
+    email: "theo@myvillage.app",
+    slackHandle: "@theo"
+  },
+  {
+    id: "DEV-004",
+    name: "Delali",
+    role: "Implementation Manager",
+    focus: "Client follow-through and work routing",
+    capacity: 65,
+    email: "delali@myvillage.app",
+    slackHandle: "@delali"
+  }
+];
+
+export const seedContracts: Contract[] = [
+  {
+    id: "CTR-001",
+    organization: "Northwind Labs",
+    name: "Northwind Labs Service Agreement",
+    client: "Northwind Labs",
+    value: 120000,
+    status: "Active",
+    ownerDeveloperId: "DEV-001",
+    startDate: "2026-06-15",
+    renewalDate: "2026-12-15",
+    workflowMode: "Email First",
+    workflowNotes:
+      "Treat Ms. Valerie's follow-up email as the source of truth and use transcripts only to enrich task descriptions.",
+    progress: [
+      {
+        id: "p1",
+        note: "Kickoff completed and statement of work approved.",
+        createdAt: "2026-07-10T10:00:00.000Z",
+        author: "Ari M."
+      },
+      {
+        id: "p2",
+        note: "Waiting on the post-meeting email to confirm dashboard rollout tasks for the next sprint.",
+        createdAt: "2026-07-23T16:30:00.000Z",
+        author: "Delali"
+      }
+    ]
+  },
+  {
+    id: "CTR-002",
+    organization: "Harvest Grid",
+    name: "Harvest Grid Extension",
+    client: "Harvest Grid",
+    value: 88000,
+    status: "At Risk",
+    ownerDeveloperId: "DEV-003",
+    startDate: "2026-07-01",
+    renewalDate: "2026-11-10",
+    workflowMode: "Transcript Assisted",
+    workflowNotes:
+      "Transcript can draft task notes, but manual review is required because recent recordings have cut off before the final action items.",
+    progress: [
+      {
+        id: "p3",
+        note: "Legal review comments received from client counsel.",
+        createdAt: "2026-07-12T15:30:00.000Z",
+        author: "Theo"
+      }
+    ]
+  }
+];
+
+export const seedProjects: Project[] = [
   {
     id: "PRJ-101",
+    contractId: "CTR-001",
     name: "Client Portal Refresh",
     client: "Northwind Labs",
-    owner: "Ari M.",
     status: "On Track",
-    progress: 74,
-    sprintGoal: "Ship authenticated dashboard and billing summary views.",
-    villagers: [
-      { name: "Nia", role: "Frontend", capacity: 80 },
-      { name: "Rafi", role: "Backend", capacity: 70 },
-      { name: "Soren", role: "QA", capacity: 65 }
-    ],
-    nextSteps: [
-      { task: "Finalize dashboard empty states", due: "Jul 22", priority: "Medium" },
-      { task: "Complete billing endpoint integration", due: "Jul 21", priority: "High" },
-      { task: "Regression pass before demo", due: "Jul 24", priority: "Medium" }
-    ]
+    ownerDeveloperId: "DEV-001",
+    summary: "Modernize the client portal with contract-level status, routing, and assignment visibility."
+  },
+  {
+    id: "PRJ-102",
+    contractId: "CTR-001",
+    name: "Automation Inbox",
+    client: "Northwind Labs",
+    status: "At Risk",
+    ownerDeveloperId: "DEV-004",
+    summary: "Convert Valerie's meeting follow-up email into status updates and draft tasks."
   },
   {
     id: "PRJ-108",
+    contractId: "CTR-002",
     name: "Field Ops Mobile Sync",
     client: "Harvest Grid",
-    owner: "Liam K.",
     status: "At Risk",
-    progress: 53,
-    sprintGoal: "Reduce offline data conflicts below 1.5%.",
-    villagers: [
-      { name: "Mika", role: "Mobile", capacity: 90 },
-      { name: "Theo", role: "Platform", capacity: 85 },
-      { name: "Jules", role: "Data", capacity: 60 }
-    ],
-    nextSteps: [
-      { task: "Patch merge conflict resolver", due: "Jul 20", priority: "High" },
-      { task: "Run 3-day offline simulation", due: "Jul 23", priority: "High" },
-      { task: "Review telemetry dropouts", due: "Jul 25", priority: "Medium" }
-    ]
-  },
-  {
-    id: "PRJ-114",
-    name: "Partner Analytics Hub",
-    client: "Skyline Commerce",
-    owner: "Rina T.",
-    status: "Blocked",
-    progress: 41,
-    sprintGoal: "Launch executive metrics board with role-based access.",
-    villagers: [
-      { name: "Anya", role: "Frontend", capacity: 75 },
-      { name: "Dax", role: "API", capacity: 80 },
-      { name: "Vik", role: "Security", capacity: 40 }
-    ],
-    nextSteps: [
-      { task: "Resolve delayed SSO credentials", due: "Jul 19", priority: "High" },
-      { task: "Align permission matrix with client IT", due: "Jul 21", priority: "High" },
-      { task: "Resume KPI panel implementation", due: "Jul 26", priority: "Low" }
-    ]
+    ownerDeveloperId: "DEV-003",
+    summary: "Improve sync reliability and release the updated field workflow tooling."
   }
 ];
 
-export const developerWorkstreams = [
+export const seedTasks: Task[] = [
   {
-    developer: "Nia",
-    project: "Client Portal Refresh",
-    currentTask: "Dashboard card states",
-    completion: 78,
-    status: "On Track"
-  },
-  {
-    developer: "Theo",
-    project: "Field Ops Mobile Sync",
-    currentTask: "Conflict resolver patch",
-    completion: 49,
-    status: "At Risk"
-  },
-  {
-    developer: "Dax",
-    project: "Partner Analytics Hub",
-    currentTask: "Auth gateway contract",
-    completion: 35,
-    status: "Blocked"
-  },
-  {
-    developer: "Rafi",
-    project: "Client Portal Refresh",
-    currentTask: "Billing endpoint integration",
-    completion: 66,
-    status: "On Track"
-  }
-] as const;
-
-export const contracts: Contract[] = [
-  {
-    id: "CTR-501",
+    id: "TASK-001",
+    contractId: "CTR-001",
     projectId: "PRJ-101",
-    client: "Northwind Labs",
-    owner: "Ari M.",
-    value: 120000,
-    renewalDate: "2026-12-14",
-    status: "Active"
+    title: "Launch contract workspace MVP",
+    summary: "Finalize one clear dashboard flow for contract folders and project drill-down.",
+    status: "In Progress",
+    priority: "High",
+    dueDate: "2026-07-30",
+    developerId: "DEV-002",
+    notificationPreference: "Slack",
+    source: "Manual",
+    awaitingAssignment: false
   },
   {
-    id: "CTR-502",
+    id: "TASK-002",
+    contractId: "CTR-001",
+    projectId: "PRJ-102",
+    title: "Parse Valerie follow-up email into tasks",
+    summary: "Auto-create tasks and update contract status from the email summary after each meeting.",
+    status: "Todo",
+    priority: "High",
+    dueDate: "2026-08-01",
+    developerId: null,
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: true
+  },
+  {
+    id: "TASK-003",
+    contractId: "CTR-002",
     projectId: "PRJ-108",
-    client: "Harvest Grid",
-    owner: "Liam K.",
-    value: 89000,
-    renewalDate: "2026-08-01",
-    status: "Renewal Due"
+    title: "Complete API reliability pass",
+    summary: "Reduce response failures and finalize service monitoring setup.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-03",
+    developerId: "DEV-003",
+    notificationPreference: "Email",
+    source: "Manual",
+    awaitingAssignment: false
   },
   {
-    id: "CTR-503",
-    projectId: "PRJ-114",
-    client: "Skyline Commerce",
-    owner: "Rina T.",
-    value: 164000,
-    renewalDate: "2026-09-10",
-    status: "Pending Signature"
+    id: "TASK-004",
+    contractId: "CTR-002",
+    projectId: "PRJ-108",
+    title: "Review transcript cutoff gaps",
+    summary: "Mark transcript segments that end before next steps so the workflow stays email-first.",
+    status: "Blocked",
+    priority: "Low",
+    dueDate: "2026-08-05",
+    developerId: "DEV-004",
+    notificationPreference: "Slack",
+    source: "Otter Transcript",
+    awaitingAssignment: false
   }
 ];
+
+export const workflowInbox: WorkflowSource[] = [
+  {
+    id: "WF-001",
+    contractId: "CTR-001",
+    sourceType: "Meeting Email",
+    title: "Valerie follow-up email",
+    summary:
+      "Primary automation trigger. Update contract status, create new tasks, then route only assignment decisions to operations.",
+    reliability: "Primary",
+    lastProcessedAt: "2026-07-23T17:10:00.000Z",
+    action: "Create tasks and set due dates from the email's next steps section."
+  },
+  {
+    id: "WF-002",
+    contractId: "CTR-001",
+    sourceType: "Otter Transcript",
+    title: "Meeting transcript",
+    summary:
+      "Useful for richer context, but not reliable enough to replace the email because some recordings stop before the action items.",
+    reliability: "Fallback",
+    lastProcessedAt: "2026-07-23T16:48:00.000Z",
+    action: "Enrich task descriptions only when the transcript contains the full close-out section."
+  },
+  {
+    id: "WF-003",
+    contractId: "CTR-002",
+    sourceType: "Meeting Email",
+    title: "Client recap email",
+    summary: "Preferred source for the next sprint commitment list and owner confirmation.",
+    reliability: "Primary",
+    lastProcessedAt: "2026-07-25T14:22:00.000Z",
+    action: "Generate draft tasks and keep developer assignment optional until reviewed."
+  }
+];
+
+export const projectDetailsById: Record<string, ProjectDetail> = {
+  "PRJ-101": {
+    phase: "Build + QA",
+    kickoffDate: "2026-06-15",
+    targetLaunchDate: "2026-08-04",
+    deliveryConfidence: "High",
+    focusAreas: [
+      "Finalize contract workspace navigation",
+      "Complete role-based activity stream filters",
+      "Lock in assignment flow with optional notifications"
+    ],
+    risks: [
+      "Status updates still depend on manual note capture when the email format changes",
+      "Notification rules need approval before sending Slack messages automatically"
+    ],
+    decisions: [
+      "Make contracts the top-level folder in the dashboard",
+      "Allow tasks to remain unassigned until operations has a developer in mind"
+    ],
+    notes: [
+      {
+        id: "n-101-1",
+        title: "Workflow Alignment",
+        body: "The team wants status updates and task creation to happen automatically from the meeting recap email.",
+        updatedAt: "2026-07-24"
+      }
+    ]
+  },
+  "PRJ-102": {
+    phase: "Discovery",
+    kickoffDate: "2026-07-20",
+    targetLaunchDate: "2026-08-15",
+    deliveryConfidence: "Medium",
+    focusAreas: [
+      "Parse next-step bullets from email",
+      "Map tasks to the correct contract and project",
+      "Keep transcript usage as a fallback enrichment source"
+    ],
+    risks: [
+      "Emails may vary in structure week to week",
+      "Transcript truncation can miss the final assignment notes"
+    ],
+    decisions: ["Prefer email as the trigger and transcripts as secondary context"],
+    notes: [
+      {
+        id: "n-102-1",
+        title: "Automation Scope",
+        body: "Only create tasks automatically. Leave developer assignment optional so operations can decide later.",
+        updatedAt: "2026-07-25"
+      }
+    ]
+  },
+  "PRJ-108": {
+    phase: "Stabilization",
+    kickoffDate: "2026-07-01",
+    targetLaunchDate: "2026-08-18",
+    deliveryConfidence: "Medium",
+    focusAreas: [
+      "Reduce sync collision rate below threshold",
+      "Improve retry handling for low-connectivity sessions",
+      "Strengthen alerting for failed background sync"
+    ],
+    risks: [
+      "Dependency on external auth token refresh timing",
+      "Field test feedback cycle is slower than expected"
+    ],
+    decisions: [
+      "Freeze non-critical UI changes until sync reliability clears",
+      "Escalate telemetry anomaly triage to daily review"
+    ],
+    notes: [
+      {
+        id: "n-108-1",
+        title: "Client Concern",
+        body: "Client requested daily visibility into unresolved sync conflicts by region.",
+        updatedAt: "2026-07-15"
+      }
+    ]
+  }
+};
