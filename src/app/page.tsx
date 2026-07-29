@@ -33,6 +33,7 @@ import {
   type TaskStatus,
   type WorkflowSource
 } from "@/lib/demo-data";
+import type { IngestionResponseBody } from "@/lib/ingestion";
 
 type TaskSummary = {
   label: string;
@@ -42,55 +43,12 @@ type TaskSummary = {
 
 const DEFAULT_WORKFLOW_TEXT = `Meeting wrap-up from Ms. Valerie\n- finalize dashboard QA pass before next demo\n- draft client release notes and share for review\n- confirm API retry thresholds with backend team`;
 
-function extractActionItems(rawText: string) {
+function getActionItemPreview(rawText: string) {
   return rawText
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => /^([-*•]|\d+[.)])\s+/.test(line))
     .map((line) => line.replace(/^([-*•]|\d+[.)])\s+/, ""));
-}
-
-function inferPriorityFromLine(line: string): TaskPriority {
-  const normalized = line.toLowerCase();
-  if (/(urgent|asap|critical|today|blocker)/.test(normalized)) {
-    return "High";
-  }
-
-  if (/(later|backlog|follow up|eventually)/.test(normalized)) {
-    return "Low";
-  }
-
-  return "Medium";
-}
-
-function inferDueDateFromLine(line: string, baseDate: Date) {
-  const normalized = line.toLowerCase();
-  const due = new Date(baseDate);
-
-  if (/(today|asap|urgent)/.test(normalized)) {
-    due.setDate(due.getDate() + 1);
-  } else if (/tomorrow/.test(normalized)) {
-    due.setDate(due.getDate() + 1);
-  } else if (/next week/.test(normalized)) {
-    due.setDate(due.getDate() + 7);
-  } else {
-    due.setDate(due.getDate() + 3);
-  }
-
-  return due.toISOString().slice(0, 10);
-}
-
-function inferContractStatusFromWorkflow(rawText: string, currentStatus: ContractStatus, sourceType: WorkflowSource["sourceType"]): ContractStatus {
-  const normalized = rawText.toLowerCase();
-  if (/(blocked|delay|risk|issue)/.test(normalized)) {
-    return "At Risk";
-  }
-
-  if (sourceType === "Meeting Email" && currentStatus !== "Closed") {
-    return "Active";
-  }
-
-  return currentStatus;
 }
 
 function formatDateTime(value: string) {
@@ -221,6 +179,7 @@ export default function Home() {
   const [workflowForm, setWorkflowForm] = useState({
     sourceType: "Meeting Email" as WorkflowSource["sourceType"],
     notificationPreference: "Email" as NotificationChannel,
+    sourceId: "",
     rawText: DEFAULT_WORKFLOW_TEXT
   });
 
@@ -303,7 +262,7 @@ export default function Home() {
   );
 
   const workflowPreviewItems = useMemo(
-    () => extractActionItems(workflowForm.rawText).slice(0, 5),
+    () => getActionItemPreview(workflowForm.rawText).slice(0, 5),
     [workflowForm.rawText]
   );
 
@@ -564,97 +523,130 @@ export default function Home() {
     setContractDrafts((current) => ({ ...current, [contractId]: "" }));
   };
 
-  const handleWorkflowRun = (event: FormEvent<HTMLFormElement>) => {
+  const handleWorkflowRun = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!selectedFolder) {
       return;
     }
 
-    const actionItems = extractActionItems(workflowForm.rawText);
-    if (!actionItems.length) {
-      setWorkflowMessage("Add at least one bullet-point action item to run the workflow.");
+    if (!workflowForm.rawText.trim()) {
+      setWorkflowMessage("Paste meeting notes or transcript content before running the workflow.");
       return;
     }
 
-    const now = new Date();
-    const timestamp = now.toISOString();
-    let projectId = selectedFolder.projects[0]?.id ?? "";
+    setWorkflowMessage("Running ingestion workflow...");
 
-    if (!projectId) {
-      projectId = `PRJ-${Date.now()}`;
-      setProjects((current) => [
-        {
-          id: projectId,
+    const endpoint =
+      workflowForm.sourceType === "Meeting Email"
+        ? "/api/ingestion/meeting-notes"
+        : "/api/ingestion/transcripts";
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          organization: selectedFolder.contract.organization,
           contractId: selectedFolder.contract.id,
-          name: `${selectedFolder.contract.organization} Delivery Queue`,
-          client: selectedFolder.contract.client,
-          status: "On Track",
-          ownerDeveloperId: selectedFolder.contract.ownerDeveloperId,
-          summary: "Auto-generated project for workflow-created tasks."
+          content: workflowForm.rawText,
+          sourceId: workflowForm.sourceId || undefined,
+          notificationPreference: workflowForm.notificationPreference
+        })
+      });
+
+      const payload = (await response.json()) as IngestionResponseBody | { error?: string; existingRunId?: string };
+
+      if (!response.ok) {
+        const duplicateMessage =
+          response.status === 409 && "existingRunId" in payload && payload.existingRunId
+            ? ` Duplicate run: ${payload.existingRunId}.`
+            : "";
+        setWorkflowMessage(`${"error" in payload && payload.error ? payload.error : "Workflow failed."}${duplicateMessage}`);
+        return;
+      }
+
+      let projectId = selectedFolder.projects[0]?.id ?? "";
+      if (!projectId) {
+        projectId = `PRJ-${Date.now()}`;
+        setProjects((current) => [
+          {
+            id: projectId,
+            contractId: selectedFolder.contract.id,
+            name: `${selectedFolder.contract.organization} Delivery Queue`,
+            client: selectedFolder.contract.client,
+            status: "On Track",
+            ownerDeveloperId: selectedFolder.contract.ownerDeveloperId,
+            summary: "Auto-generated project for ingestion-created tasks."
+          },
+          ...current
+        ]);
+      }
+
+      const typedPayload = payload as IngestionResponseBody;
+      const generatedTasks: Task[] = typedPayload.taskDrafts.map((draft, index) => ({
+        id: `TASK-${Date.now()}-${index}`,
+        contractId: selectedFolder.contract.id,
+        projectId,
+        title: draft.title,
+        summary: draft.summary,
+        status: "Todo",
+        priority: draft.priority,
+        dueDate: draft.dueDate,
+        developerId: null,
+        notificationPreference: draft.notificationPreference,
+        source: typedPayload.sourceType,
+        awaitingAssignment: true
+      }));
+
+      setTasks((current) => [...generatedTasks, ...current]);
+      setContracts((current) =>
+        current.map((contract) =>
+          contract.id === selectedFolder.contract.id
+            ? {
+                ...contract,
+                status: typedPayload.statusSuggestion,
+                progress: [
+                  {
+                    id: `p-${Date.now()}`,
+                    note: `Workflow ingested ${generatedTasks.length} task${generatedTasks.length === 1 ? "" : "s"} from ${typedPayload.sourceType}.`,
+                    createdAt: typedPayload.generatedAt,
+                    author: "Workflow Bot"
+                  },
+                  ...contract.progress
+                ]
+              }
+            : contract
+        )
+      );
+
+      setWorkflowRuns((current) => [
+        {
+          id: typedPayload.runId,
+          contractId: selectedFolder.contract.id,
+          sourceType: typedPayload.sourceType,
+          title: `${typedPayload.sourceType} import`,
+          summary: `Created ${generatedTasks.length} draft task${generatedTasks.length === 1 ? "" : "s"} for assignment.`,
+          reliability: typedPayload.sourceType === "Meeting Email" ? "Primary" : "Fallback",
+          lastProcessedAt: typedPayload.generatedAt,
+          action: `Generated ${generatedTasks.length} unassigned tasks with ${workflowForm.notificationPreference.toLowerCase()} notifications.`
         },
         ...current
       ]);
+
+      const warnings = typedPayload.warnings.length ? ` Warnings: ${typedPayload.warnings.join(" ")}` : "";
+      setWorkflowMessage(
+        `Workflow complete: ${generatedTasks.length} task${generatedTasks.length === 1 ? "" : "s"} created for ${typedPayload.organization}.${warnings}`
+      );
+      setWorkflowForm((current) => ({
+        ...current,
+        sourceId: "",
+        rawText: ""
+      }));
+    } catch {
+      setWorkflowMessage("Workflow request failed. Check your network and try again.");
     }
-
-    const generatedTasks: Task[] = actionItems.map((item, index) => ({
-      id: `TASK-${Date.now()}-${index}`,
-      contractId: selectedFolder.contract.id,
-      projectId,
-      title: item.slice(0, 72),
-      summary: `Created from ${workflowForm.sourceType.toLowerCase()} workflow intake.`,
-      status: "Todo",
-      priority: inferPriorityFromLine(item),
-      dueDate: inferDueDateFromLine(item, now),
-      developerId: null,
-      notificationPreference: workflowForm.notificationPreference,
-      source: workflowForm.sourceType,
-      awaitingAssignment: true
-    }));
-
-    setTasks((current) => [...generatedTasks, ...current]);
-
-    setContracts((current) =>
-      current.map((contract) =>
-        contract.id === selectedFolder.contract.id
-          ? {
-              ...contract,
-              status: inferContractStatusFromWorkflow(workflowForm.rawText, contract.status, workflowForm.sourceType),
-              progress: [
-                {
-                  id: `p-${Date.now()}`,
-                  note: `Workflow processed ${actionItems.length} new action item${actionItems.length === 1 ? "" : "s"} from ${workflowForm.sourceType}.`,
-                  createdAt: timestamp,
-                  author: "Workflow Bot"
-                },
-                ...contract.progress
-              ]
-            }
-          : contract
-      )
-    );
-
-    setWorkflowRuns((current) => [
-      {
-        id: `WF-RUN-${Date.now()}`,
-        contractId: selectedFolder.contract.id,
-        sourceType: workflowForm.sourceType,
-        title: `${workflowForm.sourceType} import`,
-        summary: `Created ${actionItems.length} draft task${actionItems.length === 1 ? "" : "s"} for assignment.`,
-        reliability: workflowForm.sourceType === "Meeting Email" ? "Primary" : "Fallback",
-        lastProcessedAt: timestamp,
-        action: `Generated ${actionItems.length} unassigned tasks with ${workflowForm.notificationPreference.toLowerCase()} notifications.`
-      },
-      ...current
-    ]);
-
-    setWorkflowMessage(
-      `Workflow complete: ${actionItems.length} task${actionItems.length === 1 ? "" : "s"} created in ${selectedFolder.contract.organization}.`
-    );
-
-    setWorkflowForm((current) => ({
-      ...current,
-      rawText: ""
-    }));
   };
 
   return (
@@ -793,6 +785,19 @@ export default function Home() {
               <form className="entry-form workflow-form" onSubmit={handleWorkflowRun}>
                 <div className="field-row two-col">
                   <label>
+                    Source Message ID (optional)
+                    <input
+                      value={workflowForm.sourceId}
+                      onChange={(event) =>
+                        setWorkflowForm((current) => ({
+                          ...current,
+                          sourceId: event.target.value
+                        }))
+                      }
+                      placeholder="email-message-id or transcript-id"
+                    />
+                  </label>
+                  <label>
                     Source
                     <select
                       value={workflowForm.sourceType}
@@ -806,6 +811,12 @@ export default function Home() {
                       <option value="Meeting Email">Meeting Email</option>
                       <option value="Otter Transcript">Otter Transcript</option>
                     </select>
+                  </label>
+                </div>
+                <div className="field-row two-col">
+                  <label>
+                    Organization
+                    <input value={selectedFolder?.contract.organization ?? ""} readOnly />
                   </label>
                   <label>
                     Notify New Assignees Via

@@ -121,6 +121,15 @@ export const seedDevelopers: Developer[] = [
     capacity: 65,
     email: "delali@myvillage.app",
     slackHandle: "@delali"
+  },
+  {
+    id: "DEV-005",
+    name: "Monique",
+    role: "Developer",
+    focus: "Victory Village build",
+    capacity: 75,
+    email: "monique@scratchwerk.tech",
+    slackHandle: "@monique"
   }
 ];
 
@@ -174,6 +183,34 @@ export const seedContracts: Contract[] = [
         author: "Theo"
       }
     ]
+  },
+  {
+    id: "CTR-003",
+    organization: "Victory Village",
+    name: "Victory Village Program Support",
+    client: "Victory Village",
+    value: 95000,
+    status: "Active",
+    ownerDeveloperId: "DEV-005",
+    startDate: "2026-07-15",
+    renewalDate: "2027-01-15",
+    workflowMode: "Email First",
+    workflowNotes:
+      "Hana pastes call transcriptions and email notes directly into the Automation Intake form for this folder; treat her email recap notes as the primary source and transcripts as supporting context.",
+    progress: [
+      {
+        id: "p5",
+        note: "Ingested Monique's July 29 meeting recap and created 4 tasks: avatar customization, SVG handoff, asset publishing, and FLE reading-level scoring. Next meeting scheduled for August 20, 2026.",
+        createdAt: "2026-07-29T17:37:48.000Z",
+        author: "Monique"
+      },
+      {
+        id: "p4",
+        note: "Onboarded Victory Village as a contract folder so Hana can submit transcripts and email notes.",
+        createdAt: "2026-07-29T12:00:00.000Z",
+        author: "Delali"
+      }
+    ]
   }
 ];
 
@@ -204,6 +241,15 @@ export const seedProjects: Project[] = [
     status: "At Risk",
     ownerDeveloperId: "DEV-003",
     summary: "Improve sync reliability and release the updated field workflow tooling."
+  },
+  {
+    id: "PRJ-115",
+    contractId: "CTR-003",
+    name: "Victory Village Community Program",
+    client: "Victory Village",
+    status: "On Track",
+    ownerDeveloperId: "DEV-005",
+    summary: "Track program follow-through from Hana's meeting recaps and call transcriptions."
   }
 ];
 
@@ -262,6 +308,62 @@ export const seedTasks: Task[] = [
     developerId: "DEV-004",
     notificationPreference: "Slack",
     source: "Otter Transcript",
+    awaitingAssignment: false
+  },
+  {
+    id: "TASK-005",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Customize avatars and provide selection options",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: "DEV-005",
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: false
+  },
+  {
+    id: "TASK-006",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Send SVG files to the developer team for each world",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: "DEV-005",
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: false
+  },
+  {
+    id: "TASK-007",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Edit and publish delivered village assets",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: "DEV-005",
+    notificationPreference: "Email",
+    source: "Meeting Email",
+    awaitingAssignment: false
+  },
+  {
+    id: "TASK-008",
+    contractId: "CTR-003",
+    projectId: "PRJ-115",
+    title: "Add FLE reading-level scores to the book data sets",
+    summary: "Created from meeting email ingestion.",
+    status: "Todo",
+    priority: "Medium",
+    dueDate: "2026-08-01",
+    developerId: "DEV-005",
+    notificationPreference: "Email",
+    source: "Meeting Email",
     awaitingAssignment: false
   }
 ];
