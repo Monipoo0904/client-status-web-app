@@ -4,17 +4,19 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   BriefcaseBusiness,
-  CheckCircle2,
+  ChevronRight,
   FileText,
   FolderTree,
   Handshake,
   ListTodo,
   Mail,
   Pencil,
+  Plus,
   Slack,
   Sparkles,
   Trash2,
-  UsersRound
+  UsersRound,
+  X
 } from "lucide-react";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import MyVillageLogo from "@/components/myvillage-logo";
@@ -43,6 +45,8 @@ type TaskSummary = {
   count: number;
   color: string;
 };
+
+type ModalType = "contract" | "project" | "task" | "developer" | null;
 
 const DEFAULT_WORKFLOW_TEXT = `Meeting wrap-up from Ms. Valerie\n- finalize dashboard QA pass before next demo\n- draft client release notes and share for review\n- confirm API retry thresholds with backend team`;
 
@@ -168,6 +172,30 @@ function PieChart({ segments }: { segments: TaskSummary[] }) {
   );
 }
 
+function Modal({
+  title,
+  children,
+  onClose
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <header className="modal-header">
+          <h3 id="modal-title">{title}</h3>
+          <button type="button" className="icon-button" aria-label="Close window" onClick={onClose}>
+            <X size={16} />
+          </button>
+        </header>
+        {children}
+      </section>
+    </div>
+  );
+}
+
 export default function Home() {
   const [developers, setDevelopers] = useState<Developer[]>(seedDevelopers);
   const [projects, setProjects] = useState<Project[]>(seedProjects);
@@ -180,6 +208,7 @@ export default function Home() {
   const [activeProjectId, setActiveProjectId] = useState<string>("all");
   const [workflowMessage, setWorkflowMessage] = useState("");
   const [rosterMessage, setRosterMessage] = useState("");
+  const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [projectEditForm, setProjectEditForm] = useState({
     name: "",
@@ -270,6 +299,45 @@ export default function Home() {
   const selectedFolder =
     contractFolders.find((folder) => folder.contract.id === selectedContractId) ?? contractFolders[0] ?? null;
 
+  const selectedProjects = selectedFolder?.projects ?? [];
+  const selectedProject =
+    activeProjectId === "all" ? null : selectedProjects.find((project) => project.id === activeProjectId) ?? null;
+  const visibleTasks = tasks.filter(
+    (task) =>
+      task.contractId === selectedFolder?.contract.id &&
+      (activeProjectId === "all" || task.projectId === activeProjectId)
+  );
+  const relationshipTasks =
+    activeProjectId === "all" ? visibleTasks : selectedProject ? tasks.filter((task) => task.projectId === selectedProject.id) : [];
+  const selectedProjectTasks = useMemo(
+    () => tasks.filter((task) => selectedProject && task.projectId === selectedProject.id),
+    [selectedProject, tasks]
+  );
+  const selectedProjectDevelopers = useMemo(() => {
+    if (!selectedProject) {
+      return [];
+    }
+
+    const developerIds = new Set<string>([
+      selectedProject.ownerDeveloperId,
+      ...selectedProjectTasks
+        .map((task) => task.developerId)
+        .filter((developerId): developerId is string => Boolean(developerId))
+    ]);
+
+    return Array.from(developerIds)
+      .map((developerId) => developerLookup.get(developerId))
+      .filter((developer): developer is Developer => Boolean(developer));
+  }, [developerLookup, selectedProject, selectedProjectTasks]);
+  const relationshipDevelopers = activeProjectId === "all" ? selectedFolder?.developers ?? [] : selectedProjectDevelopers;
+
+  const visibleTaskStatusSegments: TaskSummary[] = [
+    { label: "Todo", count: visibleTasks.filter((task) => task.status === "Todo").length, color: "#9c6a00" },
+    { label: "In Progress", count: visibleTasks.filter((task) => task.status === "In Progress").length, color: "#0f6a41" },
+    { label: "Blocked", count: visibleTasks.filter((task) => task.status === "Blocked").length, color: "#8a3030" },
+    { label: "Done", count: visibleTasks.filter((task) => task.status === "Done").length, color: "#0b4d30" }
+  ];
+
   const selectedWorkflow = useMemo(
     () => [...workflowRuns, ...workflowSources].filter((item) => item.contractId === selectedFolder?.contract.id),
     [selectedFolder, workflowSources, workflowRuns]
@@ -304,13 +372,6 @@ export default function Home() {
   const taskDoneCount = tasks.filter((task) => task.status === "Done").length;
   const openTaskCount = tasks.length - taskDoneCount;
   const unassignedTaskCount = tasks.filter((task) => !task.developerId).length;
-  const taskStatusSegments: TaskSummary[] = [
-    { label: "Todo", count: tasks.filter((task) => task.status === "Todo").length, color: "#9c6a00" },
-    { label: "In Progress", count: tasks.filter((task) => task.status === "In Progress").length, color: "#0f6a41" },
-    { label: "Blocked", count: tasks.filter((task) => task.status === "Blocked").length, color: "#8a3030" },
-    { label: "Done", count: tasks.filter((task) => task.status === "Done").length, color: "#0b4d30" }
-  ];
-
   const activityFeed = useMemo(() => {
     const contractActivity = contracts.flatMap((contract) =>
       contract.progress.map((entry) => ({
@@ -373,6 +434,7 @@ export default function Home() {
       capacity: 70,
       skills: []
     });
+    setActiveModal(null);
   };
 
   const handleDeveloperRemove = (developerId: string) => {
@@ -414,6 +476,13 @@ export default function Home() {
       ...current
     ]);
 
+    setActiveProjectId(nextId);
+    setTaskForm((current) => ({
+      ...current,
+      contractId: projectForm.contractId,
+      projectId: nextId
+    }));
+
     setProjectForm({
       contractId: selectedFolder?.contract.id ?? contracts[0]?.id ?? "",
       name: "",
@@ -422,6 +491,7 @@ export default function Home() {
       ownerDeveloperId: "",
       summary: ""
     });
+    setActiveModal(null);
   };
 
   const notifySlackUpdate = (contractId: string, text: string) => {
@@ -524,6 +594,7 @@ export default function Home() {
       renewalDate: "",
       workflowNotes: ""
     });
+    setActiveModal(null);
   };
 
   const handleTaskAdd = (event: FormEvent<HTMLFormElement>) => {
@@ -559,10 +630,9 @@ export default function Home() {
       );
     }
 
-    const nextProjectId = projects.find((project) => project.contractId === taskForm.contractId)?.id ?? "";
     setTaskForm({
-      contractId: selectedFolder?.contract.id ?? contracts[0]?.id ?? "",
-      projectId: nextProjectId,
+      contractId: taskForm.contractId,
+      projectId: taskForm.projectId,
       title: "",
       summary: "",
       status: "Todo",
@@ -571,6 +641,7 @@ export default function Home() {
       developerId: "",
       notificationPreference: "Email"
     });
+    setActiveModal(null);
   };
 
   const notifySlackAssignment = (
@@ -906,15 +977,129 @@ export default function Home() {
             </article>
           ) : null}
 
+          {selectedFolder ? (
+            <article className="panel relationship-panel">
+              <header className="panel-header">
+                <div>
+                  <h3>Connected Workflow</h3>
+                  <p className="panel-subtitle">Contract to project to task to developer assignment.</p>
+                </div>
+                <div className="panel-actions">
+                  <button type="button" className="button-secondary" onClick={() => setActiveModal("project")}>
+                    <Plus size={15} />
+                    Project
+                  </button>
+                  <button type="button" className="button-secondary" onClick={() => setActiveModal("task")}>
+                    <Plus size={15} />
+                    Task
+                  </button>
+                </div>
+              </header>
+              <div className="relationship-flow" aria-label="Selected workflow relationship">
+                <button type="button" className="relationship-node is-active">
+                  <span>Contract</span>
+                  <strong>{selectedFolder.contract.organization}</strong>
+                </button>
+                <ChevronRight size={18} aria-hidden="true" />
+                <select
+                  value={activeProjectId}
+                  onChange={(event) => {
+                    const nextProjectId = event.target.value;
+                    setActiveProjectId(nextProjectId);
+                    setTaskForm((current) => ({
+                      ...current,
+                      contractId: selectedFolder.contract.id,
+                      projectId:
+                        nextProjectId === "all" ? selectedProjects[0]?.id ?? "" : nextProjectId
+                    }));
+                  }}
+                  aria-label="Select project in contract"
+                >
+                  <option value="all">All projects</option>
+                  {selectedProjects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronRight size={18} aria-hidden="true" />
+                <div className="relationship-node">
+                  <span>Tasks</span>
+                  <strong>{relationshipTasks.length}</strong>
+                </div>
+                <ChevronRight size={18} aria-hidden="true" />
+                <div className="relationship-node">
+                  <span>Developers</span>
+                  <strong>{relationshipDevelopers.length}</strong>
+                </div>
+              </div>
+              {activeProjectId === "all" ? (
+                <div className="all-projects-summary">
+                  {selectedProjects.map((project) => {
+                    const projectTasks = tasks.filter((task) => task.projectId === project.id);
+                    const projectDevelopers = new Set(
+                      projectTasks
+                        .map((task) => task.developerId)
+                        .filter((developerId): developerId is string => Boolean(developerId))
+                    );
+
+                    return (
+                      <button
+                        type="button"
+                        key={project.id}
+                        className="project-summary-button"
+                        onClick={() => {
+                          setActiveProjectId(project.id);
+                          setTaskForm((current) => ({
+                            ...current,
+                            contractId: project.contractId,
+                            projectId: project.id
+                          }));
+                        }}
+                      >
+                        <span className="project-id">{project.id}</span>
+                        <strong>{project.name}</strong>
+                        <span>{projectTasks.filter((task) => task.status !== "Done").length} open tasks</span>
+                        <span>{projectDevelopers.size + 1} developers linked</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : selectedProject ? (
+                <div className="relationship-detail-grid">
+                  <div>
+                    <p className="project-id">{selectedProject.id}</p>
+                    <h3>{selectedProject.name}</h3>
+                    <p className="project-meta">{selectedProject.summary}</p>
+                  </div>
+                  <div className="relationship-stat">
+                    <span>Owner</span>
+                    <strong>{developerLookup.get(selectedProject.ownerDeveloperId)?.name ?? "Unknown"}</strong>
+                  </div>
+                  <div className="relationship-stat">
+                    <span>Open tasks</span>
+                    <strong>{relationshipTasks.filter((task) => task.status !== "Done").length}</strong>
+                  </div>
+                  <div className="relationship-stat">
+                    <span>Unassigned</span>
+                    <strong>{relationshipTasks.filter((task) => !task.developerId).length}</strong>
+                  </div>
+                </div>
+              ) : (
+                <p className="helper-copy">Add a project to this contract to begin routing tasks and developers.</p>
+              )}
+            </article>
+          ) : null}
+
           <article className="panel analytics-panel">
             <header className="panel-header">
-              <h3>Task Analytics</h3>
+              <h3>{activeProjectId === "all" ? "Contract Task Analytics" : "Project Task Analytics"}</h3>
               <FileText size={18} />
             </header>
             <div className="analytics-grid">
-              <PieChart segments={taskStatusSegments} />
+              <PieChart segments={visibleTaskStatusSegments} />
               <div className="analytics-legend">
-                {taskStatusSegments.map((segment) => (
+                {visibleTaskStatusSegments.map((segment) => (
                   <div key={segment.label} className="analytics-legend-item">
                     <span className="analytics-swatch" style={{ background: segment.color }} aria-hidden="true" />
                     <div>
@@ -1038,7 +1223,9 @@ export default function Home() {
             <article className="panel">
               <header className="panel-header">
                 <h3>Folder Team</h3>
-                <UsersRound size={18} />
+                <button type="button" className="icon-button" aria-label="Add developer" onClick={() => setActiveModal("developer")}>
+                  <Plus size={15} />
+                </button>
               </header>
               <div className="developer-grid" role="list">
                 {selectedFolder?.developers.map((developer) => (
@@ -1063,15 +1250,17 @@ export default function Home() {
           </div>
 
           <article className="panel">
-            <header className="panel-header">
-              <h3>Projects In This Workspace</h3>
-              <CheckCircle2 size={18} />
-            </header>
-            <div className="tag-row">
+              <header className="panel-header">
+                <h3>Projects In This Workspace</h3>
+                <button type="button" className="icon-button" aria-label="Add project" onClick={() => setActiveModal("project")}>
+                  <Plus size={15} />
+                </button>
+              </header>
+              <div className="tag-row">
               <button
                 type="button"
                 className={`status-chip ${activeProjectId === "all" ? "status-on-track" : "contract-pending"}`}
-                onClick={() => setActiveProjectId("all")}
+                  onClick={() => setActiveProjectId("all")}
               >
                 All projects
               </button>
@@ -1080,7 +1269,14 @@ export default function Home() {
                   key={project.id}
                   type="button"
                   className={`status-chip ${activeProjectId === project.id ? "status-on-track" : "contract-pending"}`}
-                  onClick={() => setActiveProjectId(project.id)}
+                  onClick={() => {
+                    setActiveProjectId(project.id);
+                    setTaskForm((current) => ({
+                      ...current,
+                      contractId: project.contractId,
+                      projectId: project.id
+                    }));
+                  }}
                 >
                   {project.name}
                 </button>
@@ -1209,15 +1405,12 @@ export default function Home() {
             <article className="panel">
               <header className="panel-header">
                 <h3>Contract Tasks</h3>
-                <ListTodo size={18} />
+                <button type="button" className="icon-button" aria-label="Add task" onClick={() => setActiveModal("task")}>
+                  <Plus size={15} />
+                </button>
               </header>
               <div className="task-list" role="list">
-                {tasks
-                  .filter(
-                    (task) =>
-                      task.contractId === selectedFolder?.contract.id &&
-                      (activeProjectId === "all" || task.projectId === activeProjectId)
-                  )
+                {visibleTasks
                   .map((task) => (
                     <article key={task.id} className="task-item" role="listitem">
                       <div className="contract-top">
@@ -1243,7 +1436,7 @@ export default function Home() {
                             onChange={(event) => handleTaskAssignment(task.id, event.target.value)}
                           >
                             <option value="">Assign later</option>
-                            {selectedFolder?.developers.map((developer) => (
+                            {developers.map((developer) => (
                               <option key={developer.id} value={developer.id}>
                                 {developer.name}
                               </option>
@@ -1378,7 +1571,264 @@ export default function Home() {
         </article>
       </section>
 
-      <section className="builder-grid motion-section delay-3">
+      {activeModal === "developer" ? (
+        <Modal title="Add Developer" onClose={() => setActiveModal(null)}>
+          <form className="entry-form" onSubmit={handleDeveloperAdd}>
+            <div className="field-row two-col">
+              <label>
+                Name
+                <input
+                  value={developerForm.name}
+                  onChange={(event) => setDeveloperForm((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+              <label>
+                Role
+                <input
+                  value={developerForm.role}
+                  onChange={(event) => setDeveloperForm((current) => ({ ...current, role: event.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="field-row two-col">
+              <label>
+                Focus Area
+                <input
+                  value={developerForm.focus}
+                  onChange={(event) => setDeveloperForm((current) => ({ ...current, focus: event.target.value }))}
+                />
+              </label>
+              <label>
+                Capacity %
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={developerForm.capacity}
+                  onChange={(event) =>
+                    setDeveloperForm((current) => ({ ...current, capacity: Number(event.target.value) }))
+                  }
+                />
+              </label>
+            </div>
+            <label>
+              Skills
+              <select
+                multiple
+                value={developerForm.skills}
+                onChange={(event) =>
+                  setDeveloperForm((current) => ({
+                    ...current,
+                    skills: Array.from(event.target.selectedOptions, (option) => option.value)
+                  }))
+                }
+                size={5}
+              >
+                {SKILL_OPTIONS.map((skill) => (
+                  <option key={skill} value={skill}>
+                    {skill}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit">Add Developer</button>
+          </form>
+        </Modal>
+      ) : null}
+
+      {activeModal === "project" ? (
+        <Modal title="Add Project" onClose={() => setActiveModal(null)}>
+          <form className="entry-form" onSubmit={handleProjectAdd}>
+            <div className="field-row two-col">
+              <label>
+                Contract Folder
+                <select
+                  value={projectForm.contractId}
+                  onChange={(event) => setProjectForm((current) => ({ ...current, contractId: event.target.value }))}
+                >
+                  <option value="">Select contract</option>
+                  {contracts.map((contract) => (
+                    <option key={contract.id} value={contract.id}>
+                      {contract.organization}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Project Name
+                <input
+                  value={projectForm.name}
+                  onChange={(event) => setProjectForm((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="field-row two-col">
+              <label>
+                Project Owner
+                <select
+                  value={projectForm.ownerDeveloperId}
+                  onChange={(event) =>
+                    setProjectForm((current) => ({ ...current, ownerDeveloperId: event.target.value }))
+                  }
+                >
+                  <option value="">Select developer</option>
+                  {developers.map((developer) => (
+                    <option key={developer.id} value={developer.id}>
+                      {developer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Status
+                <select
+                  value={projectForm.status}
+                  onChange={(event) =>
+                    setProjectForm((current) => ({ ...current, status: event.target.value as ProjectStatus }))
+                  }
+                >
+                  <option value="On Track">On Track</option>
+                  <option value="At Risk">At Risk</option>
+                  <option value="Blocked">Blocked</option>
+                  <option value="Done">Done</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              Client
+              <input
+                value={projectForm.client}
+                onChange={(event) => setProjectForm((current) => ({ ...current, client: event.target.value }))}
+              />
+            </label>
+            <label>
+              Project Summary
+              <textarea
+                rows={3}
+                value={projectForm.summary}
+                onChange={(event) => setProjectForm((current) => ({ ...current, summary: event.target.value }))}
+              />
+            </label>
+            <button type="submit">Add Project</button>
+          </form>
+        </Modal>
+      ) : null}
+
+      {activeModal === "task" ? (
+        <Modal title="Add Task" onClose={() => setActiveModal(null)}>
+          <form className="entry-form" onSubmit={handleTaskAdd}>
+            <div className="field-row two-col">
+              <label>
+                Contract Folder
+                <select
+                  value={taskForm.contractId}
+                  onChange={(event) => {
+                    const nextContractId = event.target.value;
+                    const nextProjectId = projects.find((project) => project.contractId === nextContractId)?.id ?? "";
+                    setTaskForm((current) => ({
+                      ...current,
+                      contractId: nextContractId,
+                      projectId: nextProjectId
+                    }));
+                  }}
+                >
+                  <option value="">Select contract</option>
+                  {contracts.map((contract) => (
+                    <option key={contract.id} value={contract.id}>
+                      {contract.organization}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Project
+                <select
+                  value={taskForm.projectId}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, projectId: event.target.value }))}
+                >
+                  <option value="">Select project</option>
+                  {selectedProjectOptions.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="field-row two-col">
+              <label>
+                Task Title
+                <input
+                  value={taskForm.title}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
+                />
+              </label>
+              <label>
+                Due Date
+                <input
+                  type="date"
+                  value={taskForm.dueDate}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, dueDate: event.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="field-row three-col">
+              <label>
+                Status
+                <select
+                  value={taskForm.status}
+                  onChange={(event) =>
+                    setTaskForm((current) => ({ ...current, status: event.target.value as TaskStatus }))
+                  }
+                >
+                  <option value="Todo">Todo</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Blocked">Blocked</option>
+                  <option value="Done">Done</option>
+                </select>
+              </label>
+              <label>
+                Priority
+                <select
+                  value={taskForm.priority}
+                  onChange={(event) =>
+                    setTaskForm((current) => ({ ...current, priority: event.target.value as TaskPriority }))
+                  }
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </label>
+              <label>
+                Developer
+                <select
+                  value={taskForm.developerId}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, developerId: event.target.value }))}
+                >
+                  <option value="">Assign later</option>
+                  {developers.map((developer) => (
+                    <option key={developer.id} value={developer.id}>
+                      {developer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label>
+              Task Summary
+              <textarea
+                rows={3}
+                value={taskForm.summary}
+                onChange={(event) => setTaskForm((current) => ({ ...current, summary: event.target.value }))}
+              />
+            </label>
+            <button type="submit">Add Task</button>
+          </form>
+        </Modal>
+      ) : null}
+
+      <section className="builder-grid legacy-builder-area motion-section delay-3">
         <article className="panel">
           <header className="panel-header">
             <h3>Add Developer</h3>
@@ -1539,7 +1989,7 @@ export default function Home() {
         </article>
       </section>
 
-      <section className="builder-grid motion-section delay-4">
+      <section className="builder-grid legacy-builder-area motion-section delay-4">
         <article className="panel">
           <header className="panel-header">
             <h3>Add Contract</h3>
