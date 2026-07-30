@@ -1,3 +1,14 @@
+// Standalone read-only detail page for a single project, linked from the
+// dashboard's project cards ("/projects/[projectId]").
+//
+// IMPORTANT: this is a server component that reads directly from the static
+// seed* arrays in demo-data.ts — it does NOT see edits made in the
+// dashboard's client-side state (src/app/page.tsx), since there's no shared
+// backend. E.g. renaming a project via the dashboard's inline edit form
+// won't be reflected here until the seed data itself is updated. If you need
+// this page to reflect live edits, it would need to become a client
+// component reading from the same lifted state as page.tsx (or a real
+// backend), not a quick tweak here.
 import Link from "next/link";
 import { ArrowLeft, Handshake, ListTodo, Mail, UsersRound } from "lucide-react";
 import MyVillageLogo from "@/components/myvillage-logo";
@@ -33,6 +44,21 @@ function formatDate(value: string) {
   });
 }
 
+function formatDateTime(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
 function statusChipClass(status: TaskStatus | ContractStatus | ProjectStatus) {
   if (status === "Done" || status === "Active" || status === "On Track") {
     return "status-chip status-on-track";
@@ -51,6 +77,9 @@ export default async function ProjectDetailsPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
+  // Falls back to a placeholder for any project not in the static seed
+  // list — this is what a visitor sees if they click into a project that
+  // was only created live in the dashboard (see file-top note).
   const project =
     seedProjects.find((item) => item.id === projectId) ??
     {
@@ -131,6 +160,7 @@ export default async function ProjectDetailsPage({
             <span>Current Phase: {detail.phase}</span>
             <span>Kickoff: {detail.kickoffDate}</span>
             <span>Target Launch: {detail.targetLaunchDate}</span>
+            <span>Next Meeting: {detail.nextMeetingAt ? formatDateTime(detail.nextMeetingAt) : "Not scheduled"}</span>
             <span>
               Delivery Confidence:{" "}
               <strong
