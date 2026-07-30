@@ -134,6 +134,34 @@ p {
   max-width: 64ch;
 }
 
+/* --- Top-level tab switcher (Workspace vs Manage) --- */
+.top-tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.top-tab {
+  border: 1px solid var(--panel-border);
+  border-radius: 0.7rem;
+  background: var(--panel);
+  color: var(--color-brand-slate);
+  padding: 0.55rem 1rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 180ms var(--ease-mvp), color 180ms var(--ease-mvp), border-color 180ms var(--ease-mvp);
+}
+
+.top-tab:hover {
+  border-color: rgba(15, 106, 65, 0.35);
+}
+
+.top-tab.is-active {
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  color: #ffffff;
+}
+
 /* --- Top metric cards (Contracts / Projects / Open Tasks / Unassigned) --- */
 .metrics-grid {
   display: grid;
@@ -372,6 +400,42 @@ p {
 
 .folder-meta-grid {
   margin-top: 0;
+}
+
+/* Hours-last-month stat block on the contract folder panel */
+.hours-summary {
+  margin-top: 0.8rem;
+  border-top: 1px solid rgba(13, 43, 30, 0.12);
+  padding-top: 0.7rem;
+}
+
+.hours-summary-grid {
+  margin-top: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.hours-summary-item {
+  border: 1px solid rgba(13, 43, 30, 0.14);
+  border-radius: 0.7rem;
+  background: rgba(15, 106, 65, 0.05);
+  padding: 0.6rem;
+  text-align: center;
+}
+
+.hours-summary-item strong {
+  display: block;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 1.3rem;
+  color: var(--color-heading);
+}
+
+.hours-summary-item span {
+  font-size: 0.72rem;
+  letter-spacing: 0.04rem;
+  text-transform: uppercase;
+  color: rgba(28, 42, 36, 0.6);
 }
 
 .helper-copy,

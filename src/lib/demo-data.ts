@@ -68,6 +68,14 @@ export type ContractProgressEntry = {
   author: string;
 };
 
+// Hours logged against a client last calendar month, split by category —
+// shown on the contract folder panel so clients can see time spent in
+// meetings vs. actual development work.
+export type ClientHoursLog = {
+  meetings: number;
+  development: number;
+};
+
 // Top-level "folder" in the app. slackChannelId is optional — only
 // contracts with one set (e.g. Victory Village) get real Slack messages;
 // see notifySlackUpdate/notifySlackAssignment in page.tsx.
@@ -85,6 +93,7 @@ export type Contract = {
   workflowNotes: string;
   progress: ContractProgressEntry[];
   slackChannelId?: string;
+  lastMonthHours: ClientHoursLog;
 };
 
 export type Task = {
@@ -226,6 +235,7 @@ export const seedContracts: Contract[] = [
     workflowMode: "Email First",
     workflowNotes:
       "Treat Ms. Valerie's follow-up email as the source of truth and use transcripts only to enrich task descriptions.",
+    lastMonthHours: { meetings: 6, development: 34 },
     progress: [
       {
         id: "p1",
@@ -254,6 +264,7 @@ export const seedContracts: Contract[] = [
     workflowMode: "Transcript Assisted",
     workflowNotes:
       "Transcript can draft task notes, but manual review is required because recent recordings have cut off before the final action items.",
+    lastMonthHours: { meetings: 4, development: 22 },
     progress: [
       {
         id: "p3",
@@ -277,6 +288,7 @@ export const seedContracts: Contract[] = [
     workflowNotes:
       "Hana pastes call transcriptions and email notes directly into the Automation Intake form for this folder; treat her email recap notes as the primary source and transcripts as supporting context.",
     slackChannelId: "C0BD1PENTLH",
+    lastMonthHours: { meetings: 9, development: 47 },
     progress: [
       {
         id: "p6",

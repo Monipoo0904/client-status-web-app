@@ -230,6 +230,7 @@ export default function Home() {
   const [contractDrafts, setContractDrafts] = useState<Record<string, string>>({});
   const [selectedContractId, setSelectedContractId] = useState(seedContracts[0]?.id ?? "");
   const [activeProjectId, setActiveProjectId] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<"workspace" | "manage">("workspace");
   const [workflowMessage, setWorkflowMessage] = useState("");
   const [rosterMessage, setRosterMessage] = useState("");
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
@@ -718,6 +719,7 @@ export default function Home() {
         renewalDate: contractForm.renewalDate || new Date().toISOString().slice(0, 10),
         workflowMode: contractForm.workflowMode,
         workflowNotes: contractForm.workflowNotes || "Review email recap before routing assignments.",
+        lastMonthHours: { meetings: 0, development: 0 },
         progress: []
       },
       ...current
@@ -1055,6 +1057,25 @@ export default function Home() {
         <MetricCard icon={<UsersRound size={20} />} label="Unassigned Tasks" value={String(unassignedTaskCount)} tone="earth" />
       </section>
 
+      <nav className="top-tabs motion-section delay-1" aria-label="Dashboard sections">
+        <button
+          type="button"
+          className={`top-tab${activeTab === "workspace" ? " is-active" : ""}`}
+          onClick={() => setActiveTab("workspace")}
+        >
+          Workspace
+        </button>
+        <button
+          type="button"
+          className={`top-tab${activeTab === "manage" ? " is-active" : ""}`}
+          onClick={() => setActiveTab("manage")}
+        >
+          Manage
+        </button>
+      </nav>
+
+      {activeTab === "workspace" ? (
+        <>
       <section className="workspace-layout motion-section delay-2">
         <aside className="panel project-sidebar">
           <header className="panel-header">
@@ -1096,6 +1117,10 @@ export default function Home() {
                   <p>
                     <strong>Tasks:</strong> {folder.tasks.length} ({folder.unassignedTasks} unassigned)
                   </p>
+                  <p>
+                    <strong>Hours last month:</strong> {folder.contract.lastMonthHours.meetings} meetings /{" "}
+                    {folder.contract.lastMonthHours.development} dev
+                  </p>
                   <ul>
                     {folder.projects.slice(0, 3).map((project) => (
                       <li key={project.id}>{project.name}</li>
@@ -1126,6 +1151,25 @@ export default function Home() {
                 <span>Developers in folder: {selectedFolder.developers.length}</span>
               </div>
               <p className="automation-note">{selectedFolder.contract.workflowNotes}</p>
+              <div className="hours-summary">
+                <p className="project-id">Hours Last Month</p>
+                <div className="hours-summary-grid">
+                  <div className="hours-summary-item">
+                    <strong>{selectedFolder.contract.lastMonthHours.meetings}</strong>
+                    <span>Meetings</span>
+                  </div>
+                  <div className="hours-summary-item">
+                    <strong>{selectedFolder.contract.lastMonthHours.development}</strong>
+                    <span>Development</span>
+                  </div>
+                  <div className="hours-summary-item">
+                    <strong>
+                      {selectedFolder.contract.lastMonthHours.meetings + selectedFolder.contract.lastMonthHours.development}
+                    </strong>
+                    <span>Total</span>
+                  </div>
+                </div>
+              </div>
             </article>
           ) : null}
 
@@ -1799,7 +1843,11 @@ export default function Home() {
           </div>
         </article>
       </section>
+        </>
+      ) : null}
 
+      {activeTab === "manage" ? (
+        <>
       <section className="builder-grid motion-section delay-3">
         <article className="panel">
           <header className="panel-header">
@@ -2292,6 +2340,8 @@ export default function Home() {
           </div>
         </article>
       </section>
+        </>
+      ) : null}
     </main>
   );
 }
