@@ -1,3 +1,7 @@
+// Shared logic behind /api/ingestion/*: turns a pasted meeting email or
+// transcript into draft tasks, a contract status suggestion, and a dedupe
+// key. Both ingestion routes call these same functions with a different
+// sourceType label.
 import { createHash } from "node:crypto";
 import type { ContractStatus, NotificationChannel, TaskPriority, WorkflowSourceType } from "@/lib/demo-data";
 
@@ -32,6 +36,9 @@ export type IngestionResponseBody = {
   warnings: string[];
 };
 
+// Builds the key markIfNew() dedupes on. Empty string means "no dedupe key" —
+// callers should skip the idempotency check in that case rather than treat
+// every no-sourceId request as a duplicate of every other.
 export function normalizeSourceId(sourceType: IngestionSourceType, sourceId?: string) {
   if (sourceId && sourceId.trim()) {
     return `${sourceType}:${sourceId.trim().toLowerCase()}`;
@@ -40,15 +47,33 @@ export function normalizeSourceId(sourceType: IngestionSourceType, sourceId?: st
   return "";
 }
 
+// Fallback sourceId when the caller doesn't supply one: a stable hash of the
+// content itself, so pasting the exact same email/transcript twice is still
+// caught as a duplicate even without an explicit message ID.
 export function deriveSourceId(sourceType: IngestionSourceType, organization: string, content: string, meetingDate?: string) {
   const hashInput = `${sourceType}|${organization}|${meetingDate ?? ""}|${content}`;
   const digest = createHash("sha256").update(hashInput).digest("hex").slice(0, 16);
   return `${sourceType.toLowerCase().replace(/\s+/g, "-")}-${digest}`;
 }
 
+// --- Action-item extraction heuristics ---
+// Real meeting notes rarely come as clean bullet lists. extractActionItems()
+// below tries progressively looser strategies until one produces results:
+//   1. Explicit bullets/numbered lines (`- foo`, `1. foo`) — most reliable.
+//   2. Lines under an "Action Steps:" / "Next Steps:" / "Follow Up:" header.
+//   3. Any remaining line that reads like an instruction (has an action verb,
+//      isn't a question or a "Discussion on:" / "Q/A:" aside).
+//   4. Last resort: just grab the first few long sentences in the text.
+// Strategies 2 and 3 exist because raw transcripts mix speaker call-outs
+// ("H.E. Should there be...") with genuine to-dos in the same paragraph.
+
 const ACTION_SECTION_HEADER_PATTERN = /^(next steps?|action steps?|to-?dos?|follow[- ]?ups?)\s*:?\s*(.*)$/i;
 const SECTION_HEADER_LINE_PATTERN = /^[A-Za-z][A-Za-z /]*:$/;
+// Matches speaker initials like "H.E." or "D.L.:" so they can be stripped
+// from the front of a line before it's evaluated as a possible action item.
 const SPEAKER_PREFIX_PATTERN = /^([A-Z]\.){1,3}:?\s*/;
+// Lines starting with these, or ending in "?", read as discussion/questions
+// rather than instructions, and are excluded even if they contain an action verb.
 const DISCUSSION_LEAD_PATTERN =
   /^(how|what|why|when|where|should|does|is|are|do|did|can|would|could|discussion on|q\/?a|note|options?)\b/i;
 const ACTION_VERB_PATTERN =
@@ -70,6 +95,8 @@ function isLikelyDiscussionLine(line: string) {
   return DISCUSSION_LEAD_PATTERN.test(line);
 }
 
+// Strategy 2: collects lines that fall under an "Action Steps:" / "Next
+// Steps:" style header, stopping at the next blank line or header.
 function extractFromActionSections(lines: string[]) {
   const items: string[] = [];
   let collecting = false;
@@ -103,6 +130,8 @@ function extractFromActionSections(lines: string[]) {
   return items;
 }
 
+// Strategy 3: scans every line for one that looks like an instruction —
+// has an action verb, isn't a question, and is a reasonable task-title length.
 function extractActionVerbLines(lines: string[]) {
   return lines
     .map((line) => stripSpeakerPrefix(line))
@@ -131,12 +160,20 @@ export function extractActionItems(rawText: string) {
     return combined.slice(0, 8);
   }
 
+  // Strategy 4 (fallback): no headers, no verb matches — just grab the
+  // first few longer sentences so the ingestion doesn't come back empty.
   return rawText
     .split(/[.!?]\s+/)
     .map((line) => line.trim())
     .filter((line) => line.length > 20)
     .slice(0, 5);
 }
+
+// --- Task draft generation ---
+// These infer priority/due-date/status from keywords in the extracted line
+// itself (e.g. "urgent" -> High priority, due tomorrow). Intentionally
+// simple keyword matching, not NLP — good enough for a demo, would need
+// real parsing for production-grade inference.
 
 export function inferPriorityFromLine(line: string): TaskPriority {
   const normalized = line.toLowerCase();

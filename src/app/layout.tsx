@@ -1,3 +1,7 @@
+// Root layout: loads the two brand fonts as CSS variables (referenced by
+// globals.css via var(--font-heading) / var(--font-sans)) and wraps every
+// route. No shared React context/providers live here yet — page.tsx owns
+// all app state locally.
 import type { Metadata } from "next";
 import { Montserrat, DM_Sans } from "next/font/google";
 import "./globals.css";

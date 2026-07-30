@@ -1,3 +1,17 @@
+// The entire dashboard: a single client component holding all app state.
+// There's no backend, so every add/edit/remove below (developers, contracts,
+// projects, tasks, project details) lives only in this component's
+// useState hooks and resets on page refresh. Seed data from
+// src/lib/demo-data.ts is the starting point, not a synced source of truth.
+//
+// Rough layout of this file, top to bottom:
+//   1. Small formatting/lookup helpers (module scope, no state)
+//   2. Home() component state (useState) and derived/memoized data (useMemo)
+//   3. Event handlers (handleXAdd, handleXRemove, notifySlack*, etc.)
+//   4. JSX render, roughly following the on-page order: hero -> metrics ->
+//      contract folder sidebar + workspace (analytics, automation intake,
+//      projects, tasks) -> builder forms (add developer/project/contract/
+//      task) -> team roster -> notification rules / activity feed.
 "use client";
 
 import Link from "next/link";
@@ -20,6 +34,7 @@ import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import MyVillageLogo from "@/components/myvillage-logo";
 import {
   SKILL_OPTIONS,
+  projectDetailsById,
   seedContracts,
   seedDevelopers,
   seedProjects,
@@ -30,6 +45,7 @@ import {
   type Developer,
   type NotificationChannel,
   type Project,
+  type ProjectDetail,
   type ProjectStatus,
   type Task,
   type TaskPriority,
@@ -45,6 +61,38 @@ type TaskSummary = {
 };
 
 const DEFAULT_WORKFLOW_TEXT = `Meeting wrap-up from Ms. Valerie\n- finalize dashboard QA pass before next demo\n- draft client release notes and share for review\n- confirm API retry thresholds with backend team`;
+
+// Used when a project has no entry in projectDetailsById (demo-data.ts) —
+// e.g. a brand-new project just created through the Add Project form.
+const DEFAULT_PROJECT_DETAIL: ProjectDetail = {
+  phase: "Planning",
+  kickoffDate: "TBD",
+  targetLaunchDate: "TBD",
+  deliveryConfidence: "Low",
+  focusAreas: [],
+  risks: [],
+  decisions: [],
+  notes: []
+};
+
+// ProjectDetail.nextMeetingAt is stored as a UTC ISO string, but the
+// <input type="datetime-local"> in the Details tab needs "YYYY-MM-DDTHH:mm"
+// in the *browser's local time* with no timezone suffix — otherwise the
+// input either rejects the value or silently shows the wrong hour. This
+// does that conversion; handleDetailSave does the reverse on save.
+function toDateTimeLocalValue(value?: string) {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const offsetMs = parsed.getTimezoneOffset() * 60000;
+  return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 16);
+}
 
 function getActionItemPreview(rawText: string) {
   return rawText
@@ -169,6 +217,10 @@ function PieChart({ segments }: { segments: TaskSummary[] }) {
 }
 
 export default function Home() {
+  // --- Core entity state ---
+  // Seeded from demo-data.ts, then mutated in place by the handlers below.
+  // This is the only source of truth in the running app; see the top-of-file
+  // note about there being no backend.
   const [developers, setDevelopers] = useState<Developer[]>(seedDevelopers);
   const [projects, setProjects] = useState<Project[]>(seedProjects);
   const [contracts, setContracts] = useState<Contract[]>(seedContracts);
@@ -189,9 +241,28 @@ export default function Home() {
     summary: ""
   });
 
+  const [projectDetails, setProjectDetails] = useState<Record<string, ProjectDetail>>(projectDetailsById);
+  const [activeProjectTab, setActiveProjectTab] = useState<Record<string, "overview" | "details">>({});
+  const [detailForm, setDetailForm] = useState<
+    Record<
+      string,
+      {
+        phase: string;
+        kickoffDate: string;
+        targetLaunchDate: string;
+        deliveryConfidence: ProjectDetail["deliveryConfidence"];
+        nextMeetingAt: string;
+        focusAreas: string;
+        risks: string;
+        decisions: string;
+      }
+    >
+  >({});
+  const [noteDraft, setNoteDraft] = useState<Record<string, { title: string; body: string }>>({});
+
   const [workflowForm, setWorkflowForm] = useState({
     sourceType: "Meeting Email" as WorkflowSource["sourceType"],
-    notificationPreference: "Email" as NotificationChannel,
+    notificationPreference: "Slack" as NotificationChannel,
     sourceId: "",
     rawText: DEFAULT_WORKFLOW_TEXT
   });
@@ -214,7 +285,7 @@ export default function Home() {
     priority: "Medium" as TaskPriority,
     dueDate: "",
     developerId: "",
-    notificationPreference: "Email" as NotificationChannel
+    notificationPreference: "Slack" as NotificationChannel
   });
 
   const [contractForm, setContractForm] = useState({
@@ -238,6 +309,10 @@ export default function Home() {
     skills: [] as string[]
   });
 
+  // --- Derived/lookup data ---
+  // Recomputed from the state above whenever it changes. The *Lookup maps
+  // exist purely so render code can do O(1) `.get(id)` instead of `.find()`
+  // scans through the id-referencing fields (ownerDeveloperId, contractId, etc).
   const developerLookup = useMemo(() => new Map(developers.map((developer) => [developer.id, developer])), [developers]);
   const contractLookup = useMemo(() => new Map(contracts.map((contract) => [contract.id, contract])), [contracts]);
   const projectLookup = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
@@ -304,11 +379,25 @@ export default function Home() {
   const taskDoneCount = tasks.filter((task) => task.status === "Done").length;
   const openTaskCount = tasks.length - taskDoneCount;
   const unassignedTaskCount = tasks.filter((task) => !task.developerId).length;
+
+  // Tasks for whichever contract folder + project tab is currently active.
+  // Feeds both the "Contract Tasks" list and the Task Analytics donut, so
+  // switching the project tab updates both at once.
+  const scopedTasks = useMemo(
+    () =>
+      tasks.filter(
+        (task) =>
+          task.contractId === selectedFolder?.contract.id &&
+          (activeProjectId === "all" || task.projectId === activeProjectId)
+      ),
+    [tasks, selectedFolder, activeProjectId]
+  );
+
   const taskStatusSegments: TaskSummary[] = [
-    { label: "Todo", count: tasks.filter((task) => task.status === "Todo").length, color: "#9c6a00" },
-    { label: "In Progress", count: tasks.filter((task) => task.status === "In Progress").length, color: "#0f6a41" },
-    { label: "Blocked", count: tasks.filter((task) => task.status === "Blocked").length, color: "#8a3030" },
-    { label: "Done", count: tasks.filter((task) => task.status === "Done").length, color: "#0b4d30" }
+    { label: "Todo", count: scopedTasks.filter((task) => task.status === "Todo").length, color: "#c17f00" },
+    { label: "In Progress", count: scopedTasks.filter((task) => task.status === "In Progress").length, color: "#2563a8" },
+    { label: "Blocked", count: scopedTasks.filter((task) => task.status === "Blocked").length, color: "#b3261e" },
+    { label: "Done", count: scopedTasks.filter((task) => task.status === "Done").length, color: "#0f6a41" }
   ];
 
   const activityFeed = useMemo(() => {
@@ -343,6 +432,12 @@ export default function Home() {
     );
   }, [contracts, workflowSources, workflowRuns]);
 
+  // --- Event handlers ---
+  // Named handleXAdd/handleXRemove/handleXEdit by convention. Most follow
+  // the same shape: validate the relevant *Form state, update the entity
+  // array via setX, then reset the form. Slack side effects (notifySlack*)
+  // are fire-and-forget — see notifySlackUpdate/notifySlackAssignment below.
+
   const handleDeveloperAdd = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!developerForm.name || !developerForm.role) {
@@ -350,6 +445,8 @@ export default function Home() {
     }
 
     const nextId = `DEV-${Date.now()}`;
+    // Real Slack handles are "firstname.lastname" — derive one from the
+    // typed name so it matches what's actually in the team's Slack workspace.
     const safeName = developerForm.name.toLowerCase().replace(/\s+/g, ".");
 
     setDevelopers((current) => [
@@ -376,6 +473,10 @@ export default function Home() {
   };
 
   const handleDeveloperRemove = (developerId: string) => {
+    // ownerDeveloperId is a required field on Contract/Project (unlike
+    // Task.developerId, which is nullable) — there's no "unassign later"
+    // fallback for ownership, so block the removal instead of leaving a
+    // dangling reference that would render as "Unknown" everywhere.
     const isOwner =
       contracts.some((contract) => contract.ownerDeveloperId === developerId) ||
       projects.some((project) => project.ownerDeveloperId === developerId);
@@ -386,6 +487,7 @@ export default function Home() {
     }
 
     setDevelopers((current) => current.filter((developer) => developer.id !== developerId));
+    // Their open tasks fall back to "assign later" rather than disappearing.
     setTasks((current) =>
       current.map((task) =>
         task.developerId === developerId ? { ...task, developerId: null, awaitingAssignment: true } : task
@@ -424,6 +526,12 @@ export default function Home() {
     });
   };
 
+  // General-purpose "post this to the contract's Slack channel" helper —
+  // used for status changes, progress notes, project edits, and workflow
+  // runs. See notifySlackAssignment further down for the task-assignment-
+  // specific variant (it needs a developer to @-mention, this one doesn't).
+  // No-ops silently if the contract has no slackChannelId configured, and
+  // doesn't block the caller on the network request (fire-and-forget).
   const notifySlackUpdate = (contractId: string, text: string) => {
     const contract = contractLookup.get(contractId);
     if (!contract?.slackChannelId) {
@@ -484,6 +592,110 @@ export default function Home() {
     }
 
     setEditingProjectId(null);
+  };
+
+  // Switches a project card between its "Overview" and "Details" tabs.
+  // detailForm is initialized lazily here (only on first switch to
+  // "details", and only if not already present) rather than up front for
+  // every project, since most projects' Details tab is never opened in a
+  // session — array fields (focusAreas/risks/decisions) are flattened to
+  // newline-joined strings for the textareas and split back out on save.
+  const handleShowProjectTab = (projectId: string, tab: "overview" | "details") => {
+    setActiveProjectTab((current) => ({ ...current, [projectId]: tab }));
+
+    if (tab === "details") {
+      setDetailForm((current) => {
+        if (current[projectId]) {
+          return current;
+        }
+
+        const detail = projectDetails[projectId] ?? DEFAULT_PROJECT_DETAIL;
+        return {
+          ...current,
+          [projectId]: {
+            phase: detail.phase,
+            kickoffDate: detail.kickoffDate,
+            targetLaunchDate: detail.targetLaunchDate,
+            deliveryConfidence: detail.deliveryConfidence,
+            nextMeetingAt: toDateTimeLocalValue(detail.nextMeetingAt),
+            focusAreas: detail.focusAreas.join("\n"),
+            risks: detail.risks.join("\n"),
+            decisions: detail.decisions.join("\n")
+          }
+        };
+      });
+    }
+  };
+
+  const handleDetailSave = (event: FormEvent<HTMLFormElement>, projectId: string) => {
+    event.preventDefault();
+    const form = detailForm[projectId];
+    if (!form) {
+      return;
+    }
+
+    const nextMeetingAt = form.nextMeetingAt ? new Date(form.nextMeetingAt).toISOString() : undefined;
+    const updated: ProjectDetail = {
+      phase: form.phase || "Planning",
+      kickoffDate: form.kickoffDate || "TBD",
+      targetLaunchDate: form.targetLaunchDate || "TBD",
+      deliveryConfidence: form.deliveryConfidence,
+      nextMeetingAt,
+      focusAreas: form.focusAreas
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+      risks: form.risks
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+      decisions: form.decisions
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+      notes: projectDetails[projectId]?.notes ?? []
+    };
+
+    setProjectDetails((current) => ({ ...current, [projectId]: updated }));
+
+    const project = projects.find((item) => item.id === projectId);
+    if (project) {
+      notifySlackUpdate(
+        project.contractId,
+        `:calendar: Details updated for *${project.name}*${
+          nextMeetingAt ? ` — next meeting ${formatDateTime(nextMeetingAt)}` : ""
+        }.`
+      );
+    }
+  };
+
+  const handleDetailNoteAdd = (event: FormEvent<HTMLFormElement>, projectId: string) => {
+    event.preventDefault();
+    const draft = noteDraft[projectId];
+    if (!draft?.title?.trim() || !draft?.body?.trim()) {
+      return;
+    }
+
+    setProjectDetails((current) => {
+      const existing = current[projectId] ?? DEFAULT_PROJECT_DETAIL;
+      return {
+        ...current,
+        [projectId]: {
+          ...existing,
+          notes: [
+            {
+              id: `n-${Date.now()}`,
+              title: draft.title.trim(),
+              body: draft.body.trim(),
+              updatedAt: new Date().toISOString().slice(0, 10)
+            },
+            ...existing.notes
+          ]
+        }
+      };
+    });
+
+    setNoteDraft((current) => ({ ...current, [projectId]: { title: "", body: "" } }));
   };
 
   const handleContractAdd = (event: FormEvent<HTMLFormElement>) => {
@@ -573,6 +785,11 @@ export default function Home() {
     });
   };
 
+  // Task-assignment-specific Slack ping, called from both handleTaskAdd
+  // (assigning a developer at creation) and handleTaskAssignment (assigning
+  // via the task's dropdown). Separate from notifySlackUpdate above because
+  // it also checks the *task's* own notificationPreference (a task set to
+  // "Email" or "None" shouldn't ping Slack even if the folder has a channel).
   const notifySlackAssignment = (
     task: { title: string; dueDate: string; notificationPreference: NotificationChannel },
     developerId: string,
@@ -802,6 +1019,12 @@ export default function Home() {
     }
   };
 
+  // --- Render ---
+  // Roughly top-to-bottom on the page: hero banner, top metric cards, then
+  // the two-column workspace (contract folder sidebar + selected folder's
+  // analytics/automation intake/projects/tasks), then the builder forms
+  // (Add Developer/Project/Contract/Task), Team Roster, and finally
+  // notification rules / recent activity feed.
   return (
     <main className="dashboard-shell">
       <section className="hero-panel">
@@ -908,7 +1131,14 @@ export default function Home() {
 
           <article className="panel analytics-panel">
             <header className="panel-header">
-              <h3>Task Analytics</h3>
+              <div>
+                <h3>Task Analytics</h3>
+                <p className="panel-subtitle">
+                  {activeProjectId === "all"
+                    ? selectedFolder?.contract.organization ?? "All projects"
+                    : projectLookup.get(activeProjectId)?.name ?? "Selected project"}
+                </p>
+              </div>
               <FileText size={18} />
             </header>
             <div className="analytics-grid">
@@ -940,6 +1170,7 @@ export default function Home() {
                 <div className="field-row two-col">
                   <label>
                     Source Message ID (optional)
+                    <span className="field-hint">A unique ID for this email or transcript so re-running the workflow on it won&apos;t create duplicate tasks.</span>
                     <input
                       value={workflowForm.sourceId}
                       onChange={(event) =>
@@ -953,6 +1184,7 @@ export default function Home() {
                   </label>
                   <label>
                     Source
+                    <span className="field-hint">Where this content came from &mdash; treat email as primary, transcripts as backup.</span>
                     <select
                       value={workflowForm.sourceType}
                       onChange={(event) =>
@@ -970,10 +1202,12 @@ export default function Home() {
                 <div className="field-row two-col">
                   <label>
                     Organization
+                    <span className="field-hint">Follows whichever contract folder is selected in the sidebar &mdash; not editable here.</span>
                     <input value={selectedFolder?.contract.organization ?? ""} readOnly />
                   </label>
                   <label>
                     Notify New Assignees Via
+                    <span className="field-hint">How the developer who gets assigned a generated task should be pinged.</span>
                     <select
                       value={workflowForm.notificationPreference}
                       onChange={(event) =>
@@ -992,6 +1226,7 @@ export default function Home() {
                 <div className="field-row">
                   <label>
                     Meeting Notes / Email Body
+                    <span className="field-hint">Paste the full email or transcript text &mdash; bullet points under &quot;Next Steps&quot; work best.</span>
                     <textarea
                       rows={6}
                       value={workflowForm.rawText}
@@ -1099,6 +1334,7 @@ export default function Home() {
                       <div className="field-row two-col">
                         <label>
                           Project Name
+                          <span className="field-hint">What shows on the card and in task listings.</span>
                           <input
                             value={projectEditForm.name}
                             onChange={(event) =>
@@ -1108,6 +1344,7 @@ export default function Home() {
                         </label>
                         <label>
                           Client
+                          <span className="field-hint">Usually matches the contract&apos;s client.</span>
                           <input
                             value={projectEditForm.client}
                             onChange={(event) =>
@@ -1119,6 +1356,7 @@ export default function Home() {
                       <div className="field-row two-col">
                         <label>
                           Status
+                          <span className="field-hint">Current delivery health.</span>
                           <select
                             value={projectEditForm.status}
                             onChange={(event) =>
@@ -1136,6 +1374,7 @@ export default function Home() {
                         </label>
                         <label>
                           Owner
+                          <span className="field-hint">Who&apos;s accountable for this project&apos;s delivery.</span>
                           <select
                             value={projectEditForm.ownerDeveloperId}
                             onChange={(event) =>
@@ -1153,6 +1392,7 @@ export default function Home() {
                       </div>
                       <label>
                         Summary
+                        <span className="field-hint">A one- or two-sentence description of what this project covers.</span>
                         <textarea
                           rows={2}
                           value={projectEditForm.summary}
@@ -1190,15 +1430,202 @@ export default function Home() {
                           </button>
                         </div>
                       </div>
-                      <div className="progress-row">
-                        <span>{contract?.organization ?? "Contract"}</span>
-                        <strong>{progressPct}%</strong>
+                      <div className="tag-row">
+                        <button
+                          type="button"
+                          className={`status-chip ${(activeProjectTab[project.id] ?? "overview") === "overview" ? "status-on-track" : "contract-pending"}`}
+                          onClick={() => handleShowProjectTab(project.id, "overview")}
+                        >
+                          Overview
+                        </button>
+                        <button
+                          type="button"
+                          className={`status-chip ${activeProjectTab[project.id] === "details" ? "status-on-track" : "contract-pending"}`}
+                          onClick={() => handleShowProjectTab(project.id, "details")}
+                        >
+                          Details
+                        </button>
                       </div>
-                      <ProgressBar value={progressPct} />
-                      <div className="task-meta-grid">
-                        <span>Total tasks: {projectTasks.length}</span>
-                        <span>Open tasks: {openTasks}</span>
-                      </div>
+                      {(activeProjectTab[project.id] ?? "overview") === "overview" ? (
+                        <>
+                          <div className="progress-row">
+                            <span>{contract?.organization ?? "Contract"}</span>
+                            <strong>{progressPct}%</strong>
+                          </div>
+                          <ProgressBar value={progressPct} />
+                          <div className="task-meta-grid">
+                            <span>Total tasks: {projectTasks.length}</span>
+                            <span>Open tasks: {openTasks}</span>
+                            <span>
+                              Next meeting:{" "}
+                              {projectDetails[project.id]?.nextMeetingAt
+                                ? formatDateTime(projectDetails[project.id].nextMeetingAt as string)
+                                : "Not scheduled"}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="project-details-tab">
+                          <form
+                            className="entry-form"
+                            onSubmit={(event) => handleDetailSave(event, project.id)}
+                          >
+                            <div className="field-row two-col">
+                              <label>
+                                Phase
+                                <span className="field-hint">Where this project currently sits (e.g. Discovery, Build, QA).</span>
+                                <input
+                                  value={detailForm[project.id]?.phase ?? ""}
+                                  onChange={(event) =>
+                                    setDetailForm((current) => ({
+                                      ...current,
+                                      [project.id]: { ...current[project.id], phase: event.target.value }
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <label>
+                                Delivery Confidence
+                                <span className="field-hint">How likely this project is to hit its target launch date.</span>
+                                <select
+                                  value={detailForm[project.id]?.deliveryConfidence ?? "Medium"}
+                                  onChange={(event) =>
+                                    setDetailForm((current) => ({
+                                      ...current,
+                                      [project.id]: {
+                                        ...current[project.id],
+                                        deliveryConfidence: event.target.value as ProjectDetail["deliveryConfidence"]
+                                      }
+                                    }))
+                                  }
+                                >
+                                  <option value="High">High</option>
+                                  <option value="Medium">Medium</option>
+                                  <option value="Low">Low</option>
+                                </select>
+                              </label>
+                            </div>
+                            <div className="field-row two-col">
+                              <label>
+                                Kickoff Date
+                                <span className="field-hint">When work on this project actually started.</span>
+                                <input
+                                  value={detailForm[project.id]?.kickoffDate ?? ""}
+                                  onChange={(event) =>
+                                    setDetailForm((current) => ({
+                                      ...current,
+                                      [project.id]: { ...current[project.id], kickoffDate: event.target.value }
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <label>
+                                Target Launch Date
+                                <span className="field-hint">The date you&apos;re aiming to ship or deliver by.</span>
+                                <input
+                                  value={detailForm[project.id]?.targetLaunchDate ?? ""}
+                                  onChange={(event) =>
+                                    setDetailForm((current) => ({
+                                      ...current,
+                                      [project.id]: { ...current[project.id], targetLaunchDate: event.target.value }
+                                    }))
+                                  }
+                                />
+                              </label>
+                            </div>
+                            <label>
+                              Next Meeting
+                              <span className="field-hint">Date and time of the next client or team check-in for this project.</span>
+                              <input
+                                type="datetime-local"
+                                value={detailForm[project.id]?.nextMeetingAt ?? ""}
+                                onChange={(event) =>
+                                  setDetailForm((current) => ({
+                                    ...current,
+                                    [project.id]: { ...current[project.id], nextMeetingAt: event.target.value }
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label>
+                              Focus Areas
+                              <span className="field-hint">One item per line — what the team is actively concentrating on right now.</span>
+                              <textarea
+                                rows={3}
+                                value={detailForm[project.id]?.focusAreas ?? ""}
+                                onChange={(event) =>
+                                  setDetailForm((current) => ({
+                                    ...current,
+                                    [project.id]: { ...current[project.id], focusAreas: event.target.value }
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label>
+                              Risks
+                              <span className="field-hint">One item per line — open risks that could delay or derail delivery.</span>
+                              <textarea
+                                rows={3}
+                                value={detailForm[project.id]?.risks ?? ""}
+                                onChange={(event) =>
+                                  setDetailForm((current) => ({
+                                    ...current,
+                                    [project.id]: { ...current[project.id], risks: event.target.value }
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label>
+                              Decisions
+                              <span className="field-hint">One item per line — decisions the team has already committed to.</span>
+                              <textarea
+                                rows={3}
+                                value={detailForm[project.id]?.decisions ?? ""}
+                                onChange={(event) =>
+                                  setDetailForm((current) => ({
+                                    ...current,
+                                    [project.id]: { ...current[project.id], decisions: event.target.value }
+                                  }))
+                                }
+                              />
+                            </label>
+                            <button type="submit">Save Details</button>
+                          </form>
+                          <form
+                            className="inline-form"
+                            onSubmit={(event) => handleDetailNoteAdd(event, project.id)}
+                          >
+                            <input
+                              value={noteDraft[project.id]?.title ?? ""}
+                              onChange={(event) =>
+                                setNoteDraft((current) => ({
+                                  ...current,
+                                  [project.id]: { title: event.target.value, body: current[project.id]?.body ?? "" }
+                                }))
+                              }
+                              placeholder="Note title"
+                            />
+                            <input
+                              value={noteDraft[project.id]?.body ?? ""}
+                              onChange={(event) =>
+                                setNoteDraft((current) => ({
+                                  ...current,
+                                  [project.id]: { title: current[project.id]?.title ?? "", body: event.target.value }
+                                }))
+                              }
+                              placeholder="Note body"
+                            />
+                            <button type="submit">Add Note</button>
+                          </form>
+                          <ul className="detail-list">
+                            {(projectDetails[project.id]?.notes ?? []).map((note) => (
+                              <li key={note.id}>
+                                <strong>{note.title}</strong> — {note.body} ({note.updatedAt})
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </article>
                   )
                 )}
@@ -1212,12 +1639,7 @@ export default function Home() {
                 <ListTodo size={18} />
               </header>
               <div className="task-list" role="list">
-                {tasks
-                  .filter(
-                    (task) =>
-                      task.contractId === selectedFolder?.contract.id &&
-                      (activeProjectId === "all" || task.projectId === activeProjectId)
-                  )
+                {scopedTasks
                   .map((task) => (
                     <article key={task.id} className="task-item" role="listitem">
                       <div className="contract-top">
@@ -1388,6 +1810,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Name
+                <span className="field-hint">Full name, e.g. &quot;Jane Doe&quot; &mdash; used for the Slack handle and email.</span>
                 <input
                   value={developerForm.name}
                   onChange={(event) =>
@@ -1397,6 +1820,7 @@ export default function Home() {
               </label>
               <label>
                 Role
+                <span className="field-hint">Their title, e.g. &quot;Frontend Engineer&quot; or &quot;CEO&quot;.</span>
                 <input
                   value={developerForm.role}
                   onChange={(event) =>
@@ -1408,6 +1832,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Focus Area
+                <span className="field-hint">A short phrase describing what they mainly work on.</span>
                 <input
                   value={developerForm.focus}
                   onChange={(event) =>
@@ -1417,6 +1842,7 @@ export default function Home() {
               </label>
               <label>
                 Capacity %
+                <span className="field-hint">How much of their bandwidth is currently available for new work.</span>
                 <input
                   type="number"
                   min={0}
@@ -1430,6 +1856,7 @@ export default function Home() {
             </div>
             <label>
               Skills
+              <span className="field-hint">Ctrl/Cmd-click to select multiple. Shown as chips on their Team Roster card.</span>
               <select
                 multiple
                 value={developerForm.skills}
@@ -1461,6 +1888,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Contract Folder
+                <span className="field-hint">Which contract this project rolls up under.</span>
                 <select
                   value={projectForm.contractId}
                   onChange={(event) =>
@@ -1477,6 +1905,7 @@ export default function Home() {
               </label>
               <label>
                 Project Name
+                <span className="field-hint">What shows on the project card and in task listings.</span>
                 <input
                   value={projectForm.name}
                   onChange={(event) => setProjectForm((current) => ({ ...current, name: event.target.value }))}
@@ -1486,6 +1915,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Client
+                <span className="field-hint">Usually matches the contract&apos;s client, but can differ for sub-brands.</span>
                 <input
                   value={projectForm.client}
                   onChange={(event) => setProjectForm((current) => ({ ...current, client: event.target.value }))}
@@ -1493,6 +1923,7 @@ export default function Home() {
               </label>
               <label>
                 Status
+                <span className="field-hint">Current delivery health, shown as the colored chip on the card.</span>
                 <select
                   value={projectForm.status}
                   onChange={(event) =>
@@ -1509,6 +1940,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Project Owner
+                <span className="field-hint">The developer accountable for this project&apos;s delivery.</span>
                 <select
                   value={projectForm.ownerDeveloperId}
                   onChange={(event) =>
@@ -1525,6 +1957,7 @@ export default function Home() {
               </label>
               <label>
                 Project Summary
+                <span className="field-hint">A one- or two-sentence description of what this project covers.</span>
                 <textarea
                   rows={3}
                   value={projectForm.summary}
@@ -1549,6 +1982,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Organization
+                <span className="field-hint">The client organization&apos;s name &mdash; becomes the folder label in the sidebar.</span>
                 <input
                   value={contractForm.organization}
                   onChange={(event) =>
@@ -1558,6 +1992,7 @@ export default function Home() {
               </label>
               <label>
                 Contract Name
+                <span className="field-hint">The formal name of the agreement, e.g. &quot;Service Agreement&quot;.</span>
                 <input
                   value={contractForm.name}
                   onChange={(event) => setContractForm((current) => ({ ...current, name: event.target.value }))}
@@ -1567,6 +2002,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Client
+                <span className="field-hint">Usually the same as Organization &mdash; kept separate for sub-brands or DBAs.</span>
                 <input
                   value={contractForm.client}
                   onChange={(event) => setContractForm((current) => ({ ...current, client: event.target.value }))}
@@ -1574,6 +2010,7 @@ export default function Home() {
               </label>
               <label>
                 Owner
+                <span className="field-hint">The developer accountable for this contract overall.</span>
                 <select
                   value={contractForm.ownerDeveloperId}
                   onChange={(event) =>
@@ -1592,6 +2029,7 @@ export default function Home() {
             <div className="field-row three-col">
               <label>
                 Value
+                <span className="field-hint">Total contract value in USD.</span>
                 <input
                   type="number"
                   min={0}
@@ -1603,6 +2041,7 @@ export default function Home() {
               </label>
               <label>
                 Status
+                <span className="field-hint">Where this contract stands &mdash; shown as the chip on the folder.</span>
                 <select
                   value={contractForm.status}
                   onChange={(event) =>
@@ -1617,6 +2056,7 @@ export default function Home() {
               </label>
               <label>
                 Workflow
+                <span className="field-hint">Whether the automation intake should trust email or transcripts more.</span>
                 <select
                   value={contractForm.workflowMode}
                   onChange={(event) =>
@@ -1634,6 +2074,7 @@ export default function Home() {
             <div className="field-row">
               <label>
                 Workflow Notes
+                <span className="field-hint">Guidance for whoever runs the intake form &mdash; what to trust, what to double-check.</span>
                 <textarea
                   rows={3}
                   value={contractForm.workflowNotes}
@@ -1646,6 +2087,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Start Date
+                <span className="field-hint">When the contract began.</span>
                 <input
                   type="date"
                   value={contractForm.startDate}
@@ -1656,6 +2098,7 @@ export default function Home() {
               </label>
               <label>
                 Renewal Date
+                <span className="field-hint">When it&apos;s up for renewal or review.</span>
                 <input
                   type="date"
                   value={contractForm.renewalDate}
@@ -1678,6 +2121,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Contract Folder
+                <span className="field-hint">Which contract this task belongs to &mdash; also narrows the Project list below.</span>
                 <select
                   value={taskForm.contractId}
                   onChange={(event) => {
@@ -1700,6 +2144,7 @@ export default function Home() {
               </label>
               <label>
                 Project
+                <span className="field-hint">Which project within that contract this task rolls up to.</span>
                 <select
                   value={taskForm.projectId}
                   onChange={(event) => setTaskForm((current) => ({ ...current, projectId: event.target.value }))}
@@ -1716,6 +2161,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Task Title
+                <span className="field-hint">A short, specific action &mdash; this is what shows up in the task list.</span>
                 <input
                   value={taskForm.title}
                   onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
@@ -1723,6 +2169,7 @@ export default function Home() {
               </label>
               <label>
                 Due Date
+                <span className="field-hint">When this task needs to be done by.</span>
                 <input
                   type="date"
                   value={taskForm.dueDate}
@@ -1733,6 +2180,7 @@ export default function Home() {
             <div className="field-row three-col">
               <label>
                 Status
+                <span className="field-hint">Where this task stands right now.</span>
                 <select
                   value={taskForm.status}
                   onChange={(event) =>
@@ -1747,6 +2195,7 @@ export default function Home() {
               </label>
               <label>
                 Priority
+                <span className="field-hint">How urgent this is relative to other open tasks.</span>
                 <select
                   value={taskForm.priority}
                   onChange={(event) =>
@@ -1760,6 +2209,7 @@ export default function Home() {
               </label>
               <label>
                 Developer
+                <span className="field-hint">Leave as &quot;Assign later&quot; if no one&apos;s been decided yet.</span>
                 <select
                   value={taskForm.developerId}
                   onChange={(event) =>
@@ -1778,6 +2228,7 @@ export default function Home() {
             <div className="field-row two-col">
               <label>
                 Notify via
+                <span className="field-hint">How the assigned developer gets pinged &mdash; only fires if the folder has Slack connected.</span>
                 <select
                   value={taskForm.notificationPreference}
                   onChange={(event) =>
@@ -1794,6 +2245,7 @@ export default function Home() {
               </label>
               <label>
                 Task Summary
+                <span className="field-hint">Extra context or acceptance criteria for whoever picks this up.</span>
                 <textarea
                   rows={3}
                   value={taskForm.summary}

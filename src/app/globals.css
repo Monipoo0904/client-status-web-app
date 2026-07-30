@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens + component styles for the whole app (no CSS modules or
+ * Tailwind utility classes in the components — everything is these
+ * hand-written classes). Green is the brand primary; --color-brand-warning/
+ * -danger/-info are semantic and reused for status chips (on-track=primary,
+ * at-risk=warning, blocked=danger, pending=info) — see statusChipClass() in
+ * page.tsx for how a status maps to a chip class.
+ *
+ * Rough section order below: reset -> hero -> metric cards -> workspace
+ * layout + sidebar -> status chips -> analytics/pie chart -> forms/buttons
+ * -> animations -> responsive breakpoints.
+ */
+
 :root {
   --background: #f4f7f6;
   --foreground: #1c2a24;
@@ -79,6 +92,7 @@ p {
   box-shadow: 0 12px 24px -18px rgba(13, 43, 30, 0.4);
 }
 
+/* --- Hero banner --- */
 .hero-panel {
   background:
     linear-gradient(128deg, rgba(15, 106, 65, 0.14), rgba(11, 77, 48, 0.08)),
@@ -120,6 +134,7 @@ p {
   max-width: 64ch;
 }
 
+/* --- Top metric cards (Contracts / Projects / Open Tasks / Unassigned) --- */
 .metrics-grid {
   display: grid;
   gap: 0.75rem;
@@ -174,6 +189,7 @@ p {
   color: var(--color-brand-info);
 }
 
+/* --- Workspace layout: contract folder sidebar + selected folder's panels --- */
 .workspace-layout {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
@@ -301,6 +317,12 @@ p {
   color: var(--color-brand-primary);
 }
 
+/* --- Status chips ---
+ * .status-chip is the base pill shape; pair it with one of the four tone
+ * classes below. Also reused (via page.tsx) as plain clickable buttons for
+ * things like the project-tab switcher and skill tags, not just status
+ * labels — hence "on-track" doubling as a generic "active/selected" tone.
+ */
 .status-chip {
   border-radius: 999px;
   padding: 0.22rem 0.62rem;
@@ -415,6 +437,7 @@ p {
   font-size: 0.8rem;
 }
 
+/* --- Task Analytics (pie chart) panel --- */
 .analytics-panel {
   background:
     linear-gradient(180deg, rgba(13, 43, 30, 0.05), transparent 48%),
@@ -583,6 +606,7 @@ p {
   gap: 0.45rem;
 }
 
+/* --- Forms + buttons (Add Developer/Project/Contract/Task, inline edits) --- */
 .inline-form input,
 .entry-form input,
 .entry-form select,
@@ -669,6 +693,20 @@ p {
   color: rgba(28, 42, 36, 0.7);
 }
 
+.field-hint {
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: rgba(28, 42, 36, 0.52);
+  margin-top: -0.18rem;
+}
+
+.project-details-tab {
+  margin-top: 0.7rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
 .entry-form textarea {
   resize: vertical;
 }
@@ -717,6 +755,7 @@ p {
   color: rgba(28, 42, 36, 0.85);
 }
 
+/* --- Entrance animations (.motion-section.delay-N in page.tsx) --- */
 @keyframes mvp-fade-up {
   from {
     opacity: 0;
@@ -768,6 +807,7 @@ p {
   }
 }
 
+/* --- Responsive breakpoints --- */
 @media (max-width: 1120px) {
   .workspace-layout {
     grid-template-columns: 1fr;

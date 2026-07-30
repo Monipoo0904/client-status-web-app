@@ -1,3 +1,6 @@
+// App wordmark: a rounded badge with an ascending line + dot, meant to read
+// as "status trending up." Uses currentColor throughout so it inherits
+// whatever text color its container sets (see .brand-mark in globals.css).
 type MyVillageLogoProps = {
   size?: number;
   className?: string;
@@ -14,8 +17,10 @@ export default function MyVillageLogo({ size = 52, className }: MyVillageLogoPro
       aria-label="MyVillage logo"
       className={className}
     >
+      {/* Rounded badge background + border */}
       <rect x="4" y="4" width="88" height="88" rx="24" fill="currentColor" fillOpacity="0.12" />
       <rect x="4" y="4" width="88" height="88" rx="24" stroke="currentColor" strokeWidth="4" />
+      {/* Ascending line + endpoint dot */}
       <path
         d="M22 64L40 40L52 54L74 26"
         stroke="currentColor"

@@ -1,3 +1,8 @@
+// Ingests a pasted Otter.ai transcript into draft tasks. Treated as a
+// "Fallback" source (see workflowNotes on each contract) — transcripts can
+// cut off before the close-out/next-steps section, so the response always
+// carries a warning to cross-check against the meeting-email counterpart
+// in meeting-notes/route.ts, which the two routes otherwise mirror closely.
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { seedContracts } from "@/lib/demo-data";
@@ -14,6 +19,8 @@ import { markIfNew } from "@/lib/ingestion-idempotency";
 const SOURCE_TYPE = "Otter Transcript" as const;
 
 export async function POST(request: Request) {
+  // Shared-secret auth is optional: if INGESTION_SHARED_SECRET isn't set
+  // (e.g. local dev), this route accepts unauthenticated requests.
   const configuredSecret = process.env.INGESTION_SHARED_SECRET;
   if (configuredSecret) {
     const providedSecret = request.headers.get("x-ingestion-secret");
@@ -54,6 +61,9 @@ export async function POST(request: Request) {
     }
   }
 
+  // NOTE: matches against the static seed list, not the dashboard's live
+  // client-side state — a contract added via the "Add Contract" form won't
+  // resolve here until it's also added to seedContracts (no shared backend).
   const contract = seedContracts.find(
     (item) => item.organization.toLowerCase() === body.organization.trim().toLowerCase()
   );
@@ -61,7 +71,7 @@ export async function POST(request: Request) {
   const taskDrafts = generateTaskDrafts(
     body.content,
     SOURCE_TYPE,
-    body.notificationPreference ?? "Email"
+    body.notificationPreference ?? "Slack"
   );
 
   if (!taskDrafts.length) {

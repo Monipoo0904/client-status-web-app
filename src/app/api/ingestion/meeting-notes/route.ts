@@ -1,3 +1,7 @@
+// Ingests a pasted post-meeting email into draft tasks. This is the
+// "primary" source per the app's Email First workflow philosophy — see the
+// sibling transcripts/route.ts for the "Fallback" counterpart. The two
+// routes are near-identical; only SOURCE_TYPE and the default warning differ.
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { seedContracts } from "@/lib/demo-data";
@@ -14,6 +18,8 @@ import { markIfNew } from "@/lib/ingestion-idempotency";
 const SOURCE_TYPE = "Meeting Email" as const;
 
 export async function POST(request: Request) {
+  // Shared-secret auth is optional: if INGESTION_SHARED_SECRET isn't set
+  // (e.g. local dev), this route accepts unauthenticated requests.
   const configuredSecret = process.env.INGESTION_SHARED_SECRET;
   if (configuredSecret) {
     const providedSecret = request.headers.get("x-ingestion-secret");
@@ -54,6 +60,10 @@ export async function POST(request: Request) {
     }
   }
 
+  // NOTE: matches against the static seed list, not whatever contracts exist
+  // in the dashboard's live client-side state. A contract added through the
+  // "Add Contract" form in the running app won't be found here until it's
+  // also added to seedContracts — there's no shared backend/database yet.
   const contract = seedContracts.find(
     (item) => item.organization.toLowerCase() === body.organization.trim().toLowerCase()
   );
@@ -61,7 +71,7 @@ export async function POST(request: Request) {
   const taskDrafts = generateTaskDrafts(
     body.content,
     SOURCE_TYPE,
-    body.notificationPreference ?? "Email"
+    body.notificationPreference ?? "Slack"
   );
 
   if (!taskDrafts.length) {
